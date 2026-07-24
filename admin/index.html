@@ -1,0 +1,1370 @@
+<!DOCTYPE html>
+<!-- LOCKED Admin Dashboard v1.0 -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LOCKED — Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #080809;
+      --surf:    #111113;
+      --card:    #18181B;
+      --bord:    #242428;
+      --text:    #F5F5F5;
+      --muted:   #9CA3AF;
+      --subtle:  #2A2A2F;
+      --orange:  #F97316;
+      --green:   #22C55E;
+      --red:     #EF4444;
+      --blue:    #3B82F6;
+      --purple:  #8B5CF6;
+      --yellow:  #F59E0B;
+    }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    h1, h2, h3, h4 { font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.03em; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--subtle); border-radius: 3px; }
+
+    /* ── SETUP SCREEN ────────────────────────────────────────── */
+    #setup-screen {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .setup-card {
+      width: 100%; max-width: 440px;
+      background: var(--surf);
+      border: 1px solid var(--bord);
+      border-radius: 20px;
+      padding: 36px 32px;
+    }
+    .setup-logo {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 42px; font-weight: 900;
+      color: var(--orange); letter-spacing: 0.07em;
+      margin-bottom: 4px;
+    }
+    .setup-sub { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+    .field-label {
+      display: block; font-size: 10px; font-weight: 700;
+      color: var(--muted); letter-spacing: 0.12em;
+      text-transform: uppercase; margin-bottom: 6px;
+    }
+    .field-input {
+      width: 100%;
+      background: var(--subtle); border: 1px solid var(--bord);
+      border-radius: 10px; padding: 11px 14px;
+      color: var(--text); font-size: 13px;
+      font-family: 'DM Sans', sans-serif;
+      outline: none; margin-bottom: 14px;
+      transition: border-color 0.2s;
+    }
+    .field-input:focus { border-color: rgba(249,115,22,0.5); }
+    .field-input::placeholder { color: rgba(148,163,184,0.4); }
+    .btn-primary {
+      width: 100%; padding: 13px; border: none; border-radius: 10px;
+      background: var(--orange); color: #fff;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 17px; font-weight: 800; letter-spacing: 0.07em;
+      cursor: pointer; transition: opacity 0.2s;
+    }
+    .btn-primary:hover { opacity: 0.88; }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+    #setup-error { color: var(--red); font-size: 12px; margin-top: 10px; }
+
+    /* ── MAIN LAYOUT ─────────────────────────────────────────── */
+    #app { display: none; flex-direction: column; min-height: 100vh; }
+
+    /* ── TOP BAR ─────────────────────────────────────────────── */
+    .topbar {
+      display: flex; align-items: center; gap: 16px;
+      padding: 0 24px; height: 56px;
+      background: var(--surf); border-bottom: 1px solid var(--bord);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .topbar-logo {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 22px; font-weight: 900; color: var(--orange);
+      letter-spacing: 0.07em; flex-shrink: 0;
+    }
+    .topbar-badge {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+      color: var(--muted); background: var(--subtle);
+      border: 1px solid var(--bord); border-radius: 6px;
+      padding: 3px 8px;
+    }
+    .topbar-spacer { flex: 1; }
+    .topbar-status {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--muted);
+    }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--subtle);
+    }
+    .status-dot.green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .status-dot.red    { background: var(--red); }
+    .status-dot.yellow { background: var(--yellow); }
+    .btn-sm {
+      padding: 6px 14px; border-radius: 8px; border: 1px solid var(--bord);
+      background: transparent; color: var(--muted); font-size: 12px;
+      font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all 0.18s;
+    }
+    .btn-sm:hover { border-color: var(--orange); color: var(--orange); }
+    .btn-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      border: 1px solid var(--bord); background: transparent;
+      color: var(--muted); cursor: pointer; display: flex;
+      align-items: center; justify-content: center; transition: all 0.18s;
+    }
+    .btn-icon:hover { border-color: var(--orange); color: var(--orange); }
+    .spin { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── TABS ────────────────────────────────────────────────── */
+    .tabs {
+      display: flex; gap: 0;
+      border-bottom: 1px solid var(--bord);
+      padding: 0 24px;
+      background: var(--surf);
+    }
+    .tab {
+      padding: 14px 18px; font-size: 13px; font-weight: 600;
+      color: var(--muted); cursor: pointer; border: none;
+      background: transparent; border-bottom: 2px solid transparent;
+      margin-bottom: -1px; transition: all 0.18s;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { color: var(--orange); border-bottom-color: var(--orange); }
+
+    /* ── CONTENT ─────────────────────────────────────────────── */
+    .content { padding: 28px 24px; max-width: 1200px; }
+
+    /* ── STAT CARDS ──────────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px; margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--surf); border: 1px solid var(--bord);
+      border-radius: 14px; padding: 18px 20px;
+    }
+    .stat-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+      color: var(--muted); text-transform: uppercase; margin-bottom: 8px;
+    }
+    .stat-value {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 38px; font-weight: 900; line-height: 1;
+      margin-bottom: 4px;
+    }
+    .stat-sub { font-size: 11px; color: var(--muted); }
+
+    /* ── SECTION ─────────────────────────────────────────────── */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .section-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 18px; font-weight: 800; letter-spacing: 0.04em;
+    }
+
+    /* ── TABLE ───────────────────────────────────────────────── */
+    .table-wrap {
+      background: var(--surf); border: 1px solid var(--bord);
+      border-radius: 14px; overflow: hidden;
+    }
+    .search-bar {
+      padding: 14px 16px; border-bottom: 1px solid var(--bord);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .search-bar input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text); font-size: 13px; font-family: 'DM Sans', sans-serif;
+    }
+    .search-bar input::placeholder { color: rgba(148,163,184,0.35); }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      padding: 10px 16px; text-align: left;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--muted);
+      border-bottom: 1px solid var(--bord);
+      background: var(--card);
+    }
+    tbody tr { border-bottom: 1px solid rgba(36,36,40,0.6); transition: background 0.15s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.025); }
+    tbody td { padding: 12px 16px; font-size: 13px; vertical-align: middle; }
+
+    /* ── BADGES ──────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 700;
+    }
+    .badge-dot { width: 5px; height: 5px; border-radius: 50%; }
+    .badge.trial   { background: rgba(245,158,11,0.12); color: var(--yellow); }
+    .badge.active  { background: rgba(34,197,94,0.12);  color: var(--green); }
+    .badge.expired { background: rgba(239,68,68,0.1);   color: var(--red); }
+    .badge.canceled{ background: rgba(148,163,184,0.1); color: var(--muted); }
+
+    /* ── USER DETAIL PANEL ───────────────────────────────────── */
+    .panel-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+      display: none; align-items: center; justify-content: flex-end;
+    }
+    .panel-overlay.open { display: flex; }
+    .side-panel {
+      width: 380px; height: 100vh; overflow-y: auto;
+      background: var(--surf); border-left: 1px solid var(--bord);
+      padding: 24px; animation: slideRight 0.25s cubic-bezier(0.16,1,0.3,1);
+    }
+    @keyframes slideRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+    .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+    .panel-section { margin-bottom: 20px; }
+    .panel-section-title {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 10px;
+    }
+    .panel-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 12px; background: var(--card); border-radius: 8px;
+      border: 1px solid var(--bord); margin-bottom: 6px;
+    }
+    .panel-row-label { font-size: 12px; color: var(--muted); }
+    .panel-row-value { font-size: 12px; font-weight: 600; color: var(--text); word-break: break-all; text-align: right; max-width: 200px; }
+
+    /* ── EMPTY / LOADING ─────────────────────────────────────── */
+    .empty-state {
+      text-align: center; padding: 52px 24px;
+      color: var(--muted); font-size: 13px;
+    }
+    .loading-row td {
+      padding: 32px; text-align: center; color: var(--muted); font-size: 13px;
+    }
+    .skeleton {
+      background: linear-gradient(90deg, var(--subtle) 25%, var(--card) 50%, var(--subtle) 75%);
+      background-size: 400% 100%; border-radius: 6px;
+      animation: shimmer 1.4s infinite;
+      height: 14px; display: inline-block;
+    }
+    @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
+    /* ── SETTINGS ────────────────────────────────────────────── */
+    .settings-card {
+      background: var(--surf); border: 1px solid var(--bord);
+      border-radius: 14px; padding: 20px; margin-bottom: 16px;
+    }
+    .settings-card-title {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 14px;
+    }
+    .inline-copy {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--card); border: 1px solid var(--bord);
+      border-radius: 8px; padding: 8px 12px; margin-bottom: 8px;
+    }
+    .inline-copy code {
+      flex: 1; font-size: 11px; color: var(--muted);
+      font-family: 'SF Mono', monospace; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    /* ── USAGE BARS ──────────────────────────────────────────── */
+    .usage-bar-wrap { margin-bottom: 14px; }
+    .usage-bar-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }
+    .usage-bar-track { height: 6px; background: var(--subtle); border-radius: 3px; overflow: hidden; }
+    .usage-bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+
+    /* ── DELETE CONFIRM ──────────────────────────────────────── */
+    .confirm-box {
+      background: rgba(239,68,68,0.07); border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 10px; padding: 14px; margin-top: 12px; display: none;
+    }
+    .btn-danger {
+      padding: 9px 16px; border-radius: 8px; border: 1px solid rgba(239,68,68,0.35);
+      background: rgba(239,68,68,0.12); color: var(--red);
+      font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.18s;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .btn-danger:hover { background: rgba(239,68,68,0.22); }
+
+    /* ── SUB EDITOR BUTTONS ─────────────────────────────────── */
+    .sub-btn, .plan-btn {
+      padding: 9px 8px; border-radius: 8px;
+      border: 1.5px solid var(--bord); background: var(--card);
+      color: var(--muted); font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all 0.18s;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .sub-btn:hover, .plan-btn:hover { border-color: var(--orange); color: var(--text); }
+    .sub-btn.selected-active  { border-color: var(--green);  background: rgba(34,197,94,0.1);  color: var(--green);  }
+    .sub-btn.selected-trial   { border-color: var(--yellow); background: rgba(245,158,11,0.1); color: var(--yellow); }
+    .sub-btn.selected-expired { border-color: var(--red);    background: rgba(239,68,68,0.1);  color: var(--red);    }
+    .sub-btn.selected-canceled{ border-color: var(--muted);  background: rgba(148,163,184,0.1);color: var(--muted);  }
+    .plan-btn.selected { border-color: var(--orange); background: rgba(249,115,22,0.1); color: var(--orange); }
+
+    /* ── WORKER STATUS ───────────────────────────────────────── */
+    .worker-ping {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;
+    }
+    .ping-card {
+      background: var(--card); border: 1px solid var(--bord);
+      border-radius: 10px; padding: 14px 16px;
+    }
+    .ping-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; }
+    .ping-value { font-size: 14px; font-weight: 600; color: var(--text); }
+  </style>
+</head>
+<body>
+
+<!-- ══ PASSWORD GATE ══════════════════════════════════════════════════ -->
+<div id="pw-gate" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px">
+  <div class="setup-card" style="max-width:380px">
+    <div class="setup-logo">LOCKED</div>
+    <div class="setup-sub" id="pw-subtitle">Admin Dashboard</div>
+
+    <!-- set password (first visit) -->
+    <div id="pw-create-form">
+      <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:18px;background:rgba(249,115,22,0.07);border:1px solid rgba(249,115,22,0.18);border-radius:9px;padding:12px 14px;">
+        Create an admin password to protect this dashboard. You'll need it every time you open the page.
+      </p>
+      <label class="field-label">Create Password</label>
+      <input id="pw-new" class="field-input" type="password" placeholder="••••••••" autocomplete="new-password"/>
+      <label class="field-label">Confirm Password</label>
+      <input id="pw-confirm" class="field-input" type="password" placeholder="••••••••" autocomplete="new-password"
+        onkeydown="if(event.key==='Enter')setPw()"/>
+      <button class="btn-primary" onclick="setPw()">Set Password</button>
+    </div>
+
+    <!-- enter password (returning visit) -->
+    <div id="pw-enter-form" style="display:none">
+      <label class="field-label">Admin Password</label>
+      <input id="pw-input" class="field-input" type="password" placeholder="••••••••" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')checkPw()"/>
+      <button class="btn-primary" onclick="checkPw()">Unlock</button>
+      <button onclick="resetPw()" style="display:block;width:100%;margin-top:10px;background:none;border:none;
+        color:var(--muted);font-size:12px;cursor:pointer;padding:6px;font-family:'DM Sans',sans-serif;">
+        Forgot password? Reset (clears saved credentials)
+      </button>
+    </div>
+
+    <div id="pw-error" style="color:var(--red);font-size:12px;margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- ══ SETUP SCREEN ══════════════════════════════════════════════════ -->
+<div id="setup-screen" style="display:none">
+  <div class="setup-card">
+    <div class="setup-logo">LOCKED</div>
+    <div class="setup-sub">Admin Dashboard — connect your Supabase project</div>
+
+    <label class="field-label">Supabase Project URL</label>
+    <input id="cfg-url" class="field-input" type="url" placeholder="https://xxxxxxxx.supabase.co" spellcheck="false"/>
+
+    <label class="field-label">Service Role Key <span style="font-weight:400;text-transform:none;letter-spacing:0">(secret_role_key — never expose publicly)</span></label>
+    <input id="cfg-key" class="field-input" type="password" placeholder="eyJhbGciOi..." spellcheck="false"/>
+
+    <label class="field-label">Cloudflare Worker URL</label>
+    <input id="cfg-worker" class="field-input" type="url" placeholder="https://lockedapi.yourname.workers.dev"/>
+
+    <button class="btn-primary" id="setup-btn" onclick="setupConnect()">Connect</button>
+    <div id="setup-error"></div>
+  </div>
+</div>
+
+<!-- ══ MAIN APP ═══════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- top bar -->
+  <div class="topbar">
+    <span class="topbar-logo">LOCKED</span>
+    <span class="topbar-badge">DASHBOARD</span>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-status">
+      <div class="status-dot" id="sb-dot"></div>
+      <span id="sb-label">Supabase</span>
+    </div>
+    <div class="topbar-status" style="margin-left:14px">
+      <div class="status-dot" id="wk-dot"></div>
+      <span id="wk-label">Worker</span>
+    </div>
+    <button class="btn-icon" id="refresh-btn" onclick="refreshAll()" title="Refresh" style="margin-left:14px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4"/>
+      </svg>
+    </button>
+    <button class="btn-sm" style="margin-left:8px" onclick="logout()">Disconnect</button>
+  </div>
+
+  <!-- tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('overview')">Overview</button>
+    <button class="tab" onclick="switchTab('users')">Users</button>
+    <button class="tab" onclick="switchTab('usage')">Usage</button>
+    <button class="tab" onclick="switchTab('settings')">Settings</button>
+  </div>
+
+  <!-- ── OVERVIEW TAB ───────────────────────────────────────────── -->
+  <div id="tab-overview" class="content">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Users</div>
+        <div class="stat-value" id="stat-total" style="color:var(--text)">—</div>
+        <div class="stat-sub">registered accounts</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active Trials</div>
+        <div class="stat-value" id="stat-trial" style="color:var(--yellow)">—</div>
+        <div class="stat-sub">trial in progress</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Paid Subscribers</div>
+        <div class="stat-value" id="stat-active" style="color:var(--green)">—</div>
+        <div class="stat-sub">active subscriptions</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Expired</div>
+        <div class="stat-value" id="stat-expired" style="color:var(--red)">—</div>
+        <div class="stat-sub">trial ended, not subscribed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Today's AI Calls</div>
+        <div class="stat-value" id="stat-aicalls" style="color:var(--blue)">—</div>
+        <div class="stat-sub">coach + meal analyses</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Cloud Synced</div>
+        <div class="stat-value" id="stat-synced" style="color:var(--purple)">—</div>
+        <div class="stat-sub">users with cloud data</div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-bottom:14px">
+      <div class="section-title">Recent Signups</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Status</th>
+            <th>Signed Up</th>
+            <th>Trial Ends</th>
+          </tr>
+        </thead>
+        <tbody id="recent-body">
+          <tr class="loading-row"><td colspan="4">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── USERS TAB ──────────────────────────────────────────────── -->
+  <div id="tab-users" class="content" style="display:none">
+    <div class="section-header">
+      <div class="section-title">All Users</div>
+      <span id="users-count" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="table-wrap">
+      <div class="search-bar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="user-search" type="text" placeholder="Search by email or ID…" oninput="filterUsers()"/>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Status</th>
+            <th>Plan</th>
+            <th>Trial Ends</th>
+            <th>Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="users-body">
+          <tr class="loading-row"><td colspan="6">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── USAGE TAB ──────────────────────────────────────────────── -->
+  <div id="tab-usage" class="content" style="display:none">
+    <div class="section-header">
+      <div class="section-title">Today's Usage</div>
+      <span id="usage-date" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px" id="usage-summary">
+      <div class="stat-card">
+        <div class="stat-label">Coach Chats</div>
+        <div class="stat-value" id="u-coach" style="color:var(--blue)">—</div>
+        <div class="stat-sub">across all users today</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Meal Analyses</div>
+        <div class="stat-value" id="u-meal" style="color:var(--green)">—</div>
+        <div class="stat-sub">across all users today</div>
+      </div>
+    </div>
+
+    <div class="section-header" style="margin-bottom:14px">
+      <div class="section-title">Per-User Breakdown</div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Coach Chats</th>
+            <th>Meal Analyses</th>
+            <th>Plan</th>
+          </tr>
+        </thead>
+        <tbody id="usage-body">
+          <tr class="loading-row"><td colspan="4">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:24px">
+      <div class="section-header" style="margin-bottom:14px">
+        <div class="section-title">This Month — Splits Generated</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Email</th><th>Splits Generated</th><th>Limit</th></tr>
+          </thead>
+          <tbody id="splits-body">
+            <tr class="loading-row"><td colspan="3">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SETTINGS TAB ───────────────────────────────────────────── -->
+  <div id="tab-settings" class="content" style="display:none">
+
+    <div class="section-header" style="margin-bottom:14px">
+      <div class="section-title">Connection</div>
+    </div>
+
+    <div class="settings-card">
+      <div class="settings-card-title">Supabase</div>
+      <div class="panel-row" style="margin-bottom:8px">
+        <span class="panel-row-label">Project URL</span>
+        <span class="panel-row-value" id="cfg-display-url" style="font-size:11px;font-family:monospace"></span>
+      </div>
+      <div class="panel-row">
+        <span class="panel-row-label">Service Key</span>
+        <span class="panel-row-value" style="font-size:11px;font-family:monospace">••••••••••••••••</span>
+      </div>
+    </div>
+
+    <div class="settings-card">
+      <div class="settings-card-title">Cloudflare Worker</div>
+      <div class="worker-ping">
+        <div class="ping-card">
+          <div class="ping-label">URL</div>
+          <div class="ping-value" id="cfg-display-worker" style="font-size:11px;word-break:break-all"></div>
+        </div>
+        <div class="ping-card">
+          <div class="ping-label">Status</div>
+          <div class="ping-value" id="worker-status-text">—</div>
+        </div>
+      </div>
+      <button class="btn-sm" onclick="pingWorker()">Ping Worker</button>
+    </div>
+
+    <div class="settings-card">
+      <div class="settings-card-title">Quick Links</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <a id="link-supabase" href="#" target="_blank"
+          style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;
+          background:var(--card);border:1px solid var(--bord);border-radius:9px;
+          color:var(--text);text-decoration:none;font-size:13px;font-weight:500;transition:all 0.18s">
+          Supabase Dashboard
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+        <a href="https://dash.cloudflare.com" target="_blank"
+          style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;
+          background:var(--card);border:1px solid var(--bord);border-radius:9px;
+          color:var(--text);text-decoration:none;font-size:13px;font-weight:500;transition:all 0.18s">
+          Cloudflare Workers Dashboard
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+        <a href="https://app.netlify.com" target="_blank"
+          style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;
+          background:var(--card);border:1px solid var(--bord);border-radius:9px;
+          color:var(--text);text-decoration:none;font-size:13px;font-weight:500;transition:all 0.18s">
+          Netlify Dashboard
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <div class="settings-card" style="border-color:rgba(239,68,68,0.2)">
+      <div class="settings-card-title" style="color:var(--red)">Disconnect</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">
+        Clears your saved credentials from this browser. The dashboard will return to the setup screen.
+      </p>
+      <button class="btn-danger" onclick="logout()">Disconnect & Clear Credentials</button>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ══ USER DETAIL PANEL ══════════════════════════════════════════════ -->
+<div class="panel-overlay" id="user-panel" onclick="closePanel(event)">
+  <div class="side-panel">
+    <div class="panel-header">
+      <h3 style="font-size:18px;font-weight:800">User Details</h3>
+      <button class="btn-icon" onclick="closePanelDirect()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Account</div>
+      <div class="panel-row"><span class="panel-row-label">Email</span><span class="panel-row-value" id="pd-email"></span></div>
+      <div class="panel-row"><span class="panel-row-label">User ID</span>
+        <span class="panel-row-value" id="pd-id" style="font-size:10px;font-family:monospace;cursor:pointer" onclick="copyId()" title="Click to copy"></span>
+      </div>
+      <div class="panel-row"><span class="panel-row-label">Created</span><span class="panel-row-value" id="pd-created"></span></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Subscription</div>
+      <div class="panel-row"><span class="panel-row-label">Status</span><span class="panel-row-value" id="pd-status"></span></div>
+      <div class="panel-row"><span class="panel-row-label">Plan</span><span class="panel-row-value" id="pd-plan"></span></div>
+      <div class="panel-row"><span class="panel-row-label">Trial Ends</span><span class="panel-row-value" id="pd-trial"></span></div>
+      <div class="panel-row"><span class="panel-row-label">Plan Expires</span><span class="panel-row-value" id="pd-expires"></span></div>
+    </div>
+
+    <!-- ── EDIT SUBSCRIPTION ──────────────────────────────── -->
+    <div class="panel-section">
+      <div class="panel-section-title" style="color:var(--orange)">Edit Subscription</div>
+
+      <!-- Status buttons -->
+      <p style="font-size:11px;color:var(--muted);margin-bottom:8px">Status</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">
+        <button class="sub-btn" data-status="active"   onclick="selectSubStatus('active')"  >Pro — Active</button>
+        <button class="sub-btn" data-status="trial"    onclick="selectSubStatus('trial')"   >Trial</button>
+        <button class="sub-btn" data-status="expired"  onclick="selectSubStatus('expired')" >Expired</button>
+        <button class="sub-btn" data-status="canceled" onclick="selectSubStatus('canceled')">Canceled</button>
+      </div>
+
+      <!-- Plan (shown when active) -->
+      <div id="edit-plan-row" style="display:none;margin-bottom:12px">
+        <p style="font-size:11px;color:var(--muted);margin-bottom:8px">Plan</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <button class="plan-btn" data-plan="monthly" onclick="selectPlan('monthly')">Monthly</button>
+          <button class="plan-btn" data-plan="annual"  onclick="selectPlan('annual')">Annual</button>
+        </div>
+      </div>
+
+      <!-- Expiry date (shown when active) -->
+      <div id="edit-expiry-row" style="display:none;margin-bottom:12px">
+        <p style="font-size:11px;color:var(--muted);margin-bottom:8px">Pro Access Until</p>
+        <input id="edit-expiry-input" type="date" class="field-input" style="margin-bottom:0;font-size:13px"/>
+      </div>
+
+      <!-- Trial end date (shown when trial) -->
+      <div id="edit-trial-row" style="display:none;margin-bottom:12px">
+        <p style="font-size:11px;color:var(--muted);margin-bottom:8px">Trial Ends</p>
+        <input id="edit-trial-input" type="date" class="field-input" style="margin-bottom:0;font-size:13px"/>
+      </div>
+
+      <div id="sub-edit-msg" style="font-size:12px;margin-bottom:8px;display:none"></div>
+      <button onclick="saveSubEdit()" id="sub-save-btn"
+        style="width:100%;padding:11px;border:none;border-radius:9px;
+        background:var(--orange);color:#fff;font-family:'Barlow Condensed',sans-serif;
+        font-size:15px;font-weight:800;letter-spacing:0.05em;cursor:pointer;opacity:0.45"
+        disabled>
+        Save Changes
+      </button>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Stripe</div>
+      <div class="panel-row"><span class="panel-row-label">Customer ID</span><span class="panel-row-value" id="pd-stripe-cust" style="font-size:10px;font-family:monospace"></span></div>
+      <div class="panel-row"><span class="panel-row-label">Subscription ID</span><span class="panel-row-value" id="pd-stripe-sub" style="font-size:10px;font-family:monospace"></span></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Today's Usage</div>
+      <div class="panel-row"><span class="panel-row-label">Coach Chats</span><span class="panel-row-value" id="pd-coach"></span></div>
+      <div class="panel-row"><span class="panel-row-label">Meal Analyses</span><span class="panel-row-value" id="pd-meal"></span></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title" style="color:var(--red)">Danger Zone</div>
+      <button class="btn-danger" style="width:100%" onclick="toggleDeleteConfirm()">Delete Account</button>
+      <div class="confirm-box" id="delete-confirm-box">
+        <p style="font-size:12px;color:var(--red);font-weight:700;margin-bottom:5px">This cannot be undone.</p>
+        <p style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:12px">
+          Permanently deletes the user's auth account, profile, usage records, and all cloud data.
+        </p>
+        <div style="display:flex;gap:8px">
+          <button onclick="toggleDeleteConfirm()" class="btn-sm" style="flex:1">Cancel</button>
+          <button onclick="deleteSelectedUser()" class="btn-danger" style="flex:1" id="delete-exec-btn">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════════════════════ */
+var SB = null;           // Supabase client
+var CFG = {};            // { url, key, worker }
+var allUsers = [];       // cached profiles array
+var selectedUser = null; // user shown in side panel
+
+/* ════════════════════════════════════════════════════════════
+   PASSWORD GATE
+════════════════════════════════════════════════════════════ */
+async function sha256(str) {
+  var buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,"0"); }).join("");
+}
+
+async function setPw() {
+  var a = document.getElementById("pw-new").value;
+  var b = document.getElementById("pw-confirm").value;
+  var errEl = document.getElementById("pw-error");
+  if (a.length < 8) { errEl.textContent = "Minimum 8 characters."; return; }
+  if (a !== b) { errEl.textContent = "Passwords don't match."; return; }
+  errEl.textContent = "";
+  var hash = await sha256(a);
+  localStorage.setItem("lk_dash_pw", hash);
+  sessionStorage.setItem("lk_dash_auth", "1");
+  showAfterAuth();
+}
+
+async function checkPw() {
+  var val = document.getElementById("pw-input").value;
+  var errEl = document.getElementById("pw-error");
+  var stored = localStorage.getItem("lk_dash_pw");
+  var hash = await sha256(val);
+  if (hash === stored) {
+    errEl.textContent = "";
+    sessionStorage.setItem("lk_dash_auth", "1");
+    showAfterAuth();
+  } else {
+    errEl.textContent = "Incorrect password.";
+    document.getElementById("pw-input").value = "";
+    document.getElementById("pw-input").focus();
+  }
+}
+
+function resetPw() {
+  if (!confirm("This clears your saved password AND Supabase credentials. Continue?")) return;
+  localStorage.removeItem("lk_dash_pw");
+  localStorage.removeItem("lk_dash_cfg");
+  sessionStorage.removeItem("lk_dash_auth");
+  window.location.reload();
+}
+
+function showAfterAuth() {
+  document.getElementById("pw-gate").style.display = "none";
+  var saved = null;
+  try { saved = JSON.parse(localStorage.getItem("lk_dash_cfg")); } catch(e) {}
+  if (saved && saved.url && saved.key) {
+    document.getElementById("cfg-url").value    = saved.url;
+    document.getElementById("cfg-key").value    = saved.key;
+    document.getElementById("cfg-worker").value = saved.worker || "";
+    setupConnect(true);
+  } else {
+    document.getElementById("setup-screen").style.display = "flex";
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   SETUP
+════════════════════════════════════════════════════════════ */
+(function init() {
+  var storedPw   = localStorage.getItem("lk_dash_pw");
+  var authed     = sessionStorage.getItem("lk_dash_auth");
+
+  if (!storedPw) {
+    /* First visit — show create password form */
+    document.getElementById("pw-subtitle").textContent = "Create an admin password";
+    document.getElementById("pw-create-form").style.display = "";
+    document.getElementById("pw-enter-form").style.display = "none";
+    return;
+  }
+
+  if (authed) {
+    /* Already unlocked this session */
+    showAfterAuth();
+    return;
+  }
+
+  /* Has password, not yet unlocked this session */
+  document.getElementById("pw-subtitle").textContent = "Admin Dashboard";
+  document.getElementById("pw-create-form").style.display = "none";
+  document.getElementById("pw-enter-form").style.display = "";
+  setTimeout(function(){ document.getElementById("pw-input").focus(); }, 100);
+})();
+
+async function setupConnect(silent) {
+  var url    = document.getElementById("cfg-url").value.trim().replace(/\/$/, "");
+  var key    = document.getElementById("cfg-key").value.trim();
+  var worker = document.getElementById("cfg-worker").value.trim().replace(/\/$/, "");
+  var errEl  = document.getElementById("setup-error");
+  var btn    = document.getElementById("setup-btn");
+
+  if (!url || !key) { if(errEl) errEl.textContent = "URL and service key are required."; return; }
+
+  if (btn) { btn.textContent = "Connecting…"; btn.disabled = true; }
+
+  try {
+    SB = window.supabase.createClient(url, key, { auth: { persistSession: false } });
+    /* quick health check */
+    var { error } = await SB.from("profiles").select("id", { count: "exact", head: true });
+    if (error) throw error;
+
+    CFG = { url, key, worker };
+    localStorage.setItem("lk_dash_cfg", JSON.stringify(CFG));
+
+    document.getElementById("setup-screen").style.display = "none";
+    document.getElementById("app").style.display = "flex";
+    document.getElementById("app").style.flexDirection = "column";
+
+    document.getElementById("cfg-display-url").textContent    = url;
+    document.getElementById("cfg-display-worker").textContent = worker || "—";
+    try { document.getElementById("link-supabase").href = url.replace("supabase.co", "supabase.com/dashboard/project/") + "/editor"; } catch(e) {}
+
+    setSbStatus("green", "Connected");
+    refreshAll();
+    if (worker) pingWorker();
+
+  } catch(e) {
+    if (errEl) errEl.textContent = "Connection failed: " + (e.message || "Check URL and service key.");
+    if (btn) { btn.textContent = "Connect"; btn.disabled = false; }
+    setSbStatus("red", "Error");
+  }
+}
+
+function logout() {
+  localStorage.removeItem("lk_dash_cfg");
+  sessionStorage.removeItem("lk_dash_auth");
+  window.location.reload();
+}
+
+/* ════════════════════════════════════════════════════════════
+   TAB SWITCHING
+════════════════════════════════════════════════════════════ */
+function switchTab(name) {
+  ["overview","users","usage","settings"].forEach(function(t) {
+    document.getElementById("tab-"+t).style.display = t === name ? "" : "none";
+  });
+  document.querySelectorAll(".tab").forEach(function(btn) {
+    btn.classList.toggle("active", btn.textContent.toLowerCase().startsWith(name));
+  });
+  if (name === "usage" && document.getElementById("usage-date").textContent === "") loadUsage();
+}
+
+/* ════════════════════════════════════════════════════════════
+   STATUS INDICATORS
+════════════════════════════════════════════════════════════ */
+function setSbStatus(color, label) {
+  var d = document.getElementById("sb-dot");
+  var l = document.getElementById("sb-label");
+  d.className = "status-dot " + color;
+  l.textContent = label;
+}
+function setWkStatus(color, label) {
+  var d = document.getElementById("wk-dot");
+  var l = document.getElementById("wk-label");
+  d.className = "status-dot " + color;
+  l.textContent = label;
+}
+
+/* ════════════════════════════════════════════════════════════
+   REFRESH ALL
+════════════════════════════════════════════════════════════ */
+async function refreshAll() {
+  var icon = document.querySelector("#refresh-btn svg");
+  if (icon) icon.classList.add("spin");
+  try {
+    await loadProfiles();
+    await loadOverview();
+  } finally {
+    if (icon) icon.classList.remove("spin");
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   LOAD PROFILES
+════════════════════════════════════════════════════════════ */
+async function loadProfiles() {
+  try {
+    var { data, error } = await SB
+      .from("profiles")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    allUsers = data || [];
+    renderUsersTable();
+    setSbStatus("green", "Connected");
+  } catch(e) {
+    setSbStatus("red", "Error");
+    console.error(e);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   OVERVIEW
+════════════════════════════════════════════════════════════ */
+async function loadOverview() {
+  var total   = allUsers.length;
+  var trial   = allUsers.filter(function(u){ return u.subscription_status==="trial" && new Date(u.trial_ends_at) > new Date(); }).length;
+  var active  = allUsers.filter(function(u){ return u.subscription_status==="active"; }).length;
+  var expired = allUsers.filter(function(u){
+    return u.subscription_status==="expired" || (u.subscription_status==="trial" && new Date(u.trial_ends_at) <= new Date());
+  }).length;
+
+  setStatEl("stat-total",   total);
+  setStatEl("stat-trial",   trial);
+  setStatEl("stat-active",  active);
+  setStatEl("stat-expired", expired);
+
+  /* cloud synced users */
+  try {
+    var { data: syncData } = await SB.from("user_data").select("user_id", { count: "exact" });
+    var syncedIds = new Set((syncData||[]).map(function(r){return r.user_id;}));
+    setStatEl("stat-synced", syncedIds.size);
+  } catch(e) { setStatEl("stat-synced", "?"); }
+
+  /* today's AI calls */
+  try {
+    var today = new Date().toISOString().split("T")[0];
+    var { data: usageData } = await SB.from("usage_daily").select("coach_chats,meal_analyses").eq("date", today);
+    var totalCalls = (usageData||[]).reduce(function(a,r){ return a + (r.coach_chats||0) + (r.meal_analyses||0); }, 0);
+    setStatEl("stat-aicalls", totalCalls);
+  } catch(e) { setStatEl("stat-aicalls", "?"); }
+
+  /* recent signups table */
+  var recentBody = document.getElementById("recent-body");
+  if (!allUsers.length) {
+    recentBody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">No users yet</td></tr>';
+    return;
+  }
+  recentBody.innerHTML = allUsers.slice(0,8).map(function(u){
+    return '<tr style="cursor:pointer" onclick="openPanel(\'' + u.id + '\')">' +
+      '<td>' + u.email + '</td>' +
+      '<td>' + statusBadge(u) + '</td>' +
+      '<td>' + fmtDate(u.created_at) + '</td>' +
+      '<td>' + fmtDate(u.trial_ends_at) + '</td>' +
+    '</tr>';
+  }).join("");
+}
+
+/* ════════════════════════════════════════════════════════════
+   USERS TABLE
+════════════════════════════════════════════════════════════ */
+function renderUsersTable(filter) {
+  var body = document.getElementById("users-body");
+  var list = filter
+    ? allUsers.filter(function(u){ var q=filter.toLowerCase(); return u.email.toLowerCase().includes(q)||u.id.includes(q); })
+    : allUsers;
+
+  document.getElementById("users-count").textContent = list.length + " user" + (list.length===1?"":"s");
+
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">No users found</td></tr>';
+    return;
+  }
+  body.innerHTML = list.map(function(u){
+    return '<tr style="cursor:pointer" onclick="openPanel(\'' + u.id + '\')">' +
+      '<td>' + u.email + '</td>' +
+      '<td>' + statusBadge(u) + '</td>' +
+      '<td style="color:var(--muted)">' + (u.current_plan || '—') + '</td>' +
+      '<td style="color:var(--muted)">' + fmtDate(u.trial_ends_at) + '</td>' +
+      '<td style="color:var(--muted)">' + fmtDate(u.created_at) + '</td>' +
+      '<td><button class="btn-sm" onclick="event.stopPropagation();openPanel(\'' + u.id + '\')" style="padding:4px 10px;font-size:11px">View</button></td>' +
+    '</tr>';
+  }).join("");
+}
+
+function filterUsers() {
+  renderUsersTable(document.getElementById("user-search").value);
+}
+
+/* ════════════════════════════════════════════════════════════
+   USAGE TAB
+════════════════════════════════════════════════════════════ */
+async function loadUsage() {
+  var today = new Date().toISOString().split("T")[0];
+  document.getElementById("usage-date").textContent = "Today — " + new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+
+  try {
+    var { data: rows } = await SB
+      .from("usage_daily")
+      .select("user_id,coach_chats,meal_analyses")
+      .eq("date", today)
+      .order("coach_chats", { ascending: false });
+
+    var totalCoach = 0, totalMeal = 0;
+    (rows||[]).forEach(function(r){ totalCoach += r.coach_chats||0; totalMeal += r.meal_analyses||0; });
+
+    document.getElementById("u-coach").textContent = totalCoach;
+    document.getElementById("u-meal").textContent  = totalMeal;
+
+    var usageBody = document.getElementById("usage-body");
+    if (!rows || !rows.length) {
+      usageBody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted)">No activity today</td></tr>';
+    } else {
+      usageBody.innerHTML = rows.map(function(r){
+        var profile = allUsers.find(function(u){ return u.id===r.user_id; });
+        var email   = profile ? profile.email : r.user_id.slice(0,8)+"…";
+        var isPro   = profile && profile.subscription_status === "active";
+        return '<tr>' +
+          '<td>' + email + '</td>' +
+          '<td>' + (r.coach_chats||0) + (isPro?'':' / 10') + '</td>' +
+          '<td>' + (r.meal_analyses||0) + (isPro?'':' / 5') + '</td>' +
+          '<td>' + statusBadge(profile) + '</td>' +
+        '</tr>';
+      }).join("");
+    }
+  } catch(e) { console.error(e); }
+
+  /* monthly splits */
+  try {
+    var month = new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0");
+    var { data: mRows } = await SB
+      .from("usage_monthly")
+      .select("user_id,splits_generated")
+      .eq("month", month)
+      .order("splits_generated", { ascending: false });
+
+    var splitsBody = document.getElementById("splits-body");
+    if (!mRows || !mRows.length) {
+      splitsBody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--muted)">No splits generated this month</td></tr>';
+    } else {
+      splitsBody.innerHTML = mRows.map(function(r){
+        var profile = allUsers.find(function(u){ return u.id===r.user_id; });
+        var email   = profile ? profile.email : r.user_id.slice(0,8)+"…";
+        var isPro   = profile && profile.subscription_status === "active";
+        return '<tr>' +
+          '<td>' + email + '</td>' +
+          '<td>' + (r.splits_generated||0) + '</td>' +
+          '<td style="color:var(--muted)">' + (isPro?'Unlimited':'1 / month') + '</td>' +
+        '</tr>';
+      }).join("");
+    }
+  } catch(e) {}
+}
+
+/* ════════════════════════════════════════════════════════════
+   USER PANEL
+════════════════════════════════════════════════════════════ */
+async function openPanel(userId) {
+  var user = allUsers.find(function(u){ return u.id===userId; });
+  if (!user) return;
+  selectedUser = user;
+
+  document.getElementById("pd-email").textContent   = user.email;
+  document.getElementById("pd-id").textContent       = user.id;
+  document.getElementById("pd-created").textContent  = fmtDateTime(user.created_at);
+  document.getElementById("pd-status").innerHTML     = statusBadge(user);
+  document.getElementById("pd-plan").textContent     = user.current_plan || "—";
+  document.getElementById("pd-trial").textContent    = user.trial_ends_at ? fmtDateTime(user.trial_ends_at) : "—";
+  document.getElementById("pd-expires").textContent  = user.plan_expires_at ? fmtDateTime(user.plan_expires_at) : "—";
+  document.getElementById("pd-stripe-cust").textContent = user.stripe_customer_id || "—";
+  document.getElementById("pd-stripe-sub").textContent  = user.stripe_subscription_id || "—";
+  document.getElementById("pd-coach").textContent = "…";
+  document.getElementById("pd-meal").textContent  = "…";
+
+  document.getElementById("delete-confirm-box").style.display = "none";
+  _resetSubEditor(user);
+  document.getElementById("user-panel").classList.add("open");
+
+  /* load today's usage for this user */
+  try {
+    var today = new Date().toISOString().split("T")[0];
+    var { data } = await SB.from("usage_daily")
+      .select("coach_chats,meal_analyses")
+      .eq("user_id", userId).eq("date", today).single();
+    document.getElementById("pd-coach").textContent = data ? (data.coach_chats||0) : "0";
+    document.getElementById("pd-meal").textContent  = data ? (data.meal_analyses||0) : "0";
+  } catch(e) {
+    document.getElementById("pd-coach").textContent = "0";
+    document.getElementById("pd-meal").textContent  = "0";
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   SUBSCRIPTION EDITOR
+════════════════════════════════════════════════════════════ */
+var _editStatus = null;
+var _editPlan   = null;
+
+function _resetSubEditor(user) {
+  /* Clear selections */
+  document.querySelectorAll(".sub-btn").forEach(function(b){ b.className="sub-btn"; });
+  document.querySelectorAll(".plan-btn").forEach(function(b){ b.className="plan-btn"; });
+  document.getElementById("edit-plan-row").style.display   = "none";
+  document.getElementById("edit-expiry-row").style.display = "none";
+  document.getElementById("edit-trial-row").style.display  = "none";
+  document.getElementById("sub-edit-msg").style.display    = "none";
+  document.getElementById("sub-save-btn").disabled = true;
+  document.getElementById("sub-save-btn").style.opacity = "0.45";
+  _editStatus = null;
+  _editPlan   = null;
+
+  /* Pre-select current status */
+  if (user) selectSubStatus(user.subscription_status, true);
+}
+
+function selectSubStatus(status, init) {
+  _editStatus = status;
+  document.querySelectorAll(".sub-btn").forEach(function(b){ b.className="sub-btn"; });
+  var btn = document.querySelector('[data-status="'+status+'"]');
+  if (btn) btn.className = "sub-btn selected-" + status;
+
+  /* Show/hide conditional rows */
+  var isActive = status === "active";
+  var isTrial  = status === "trial";
+  document.getElementById("edit-plan-row").style.display   = isActive ? "" : "none";
+  document.getElementById("edit-expiry-row").style.display = isActive ? "" : "none";
+  document.getElementById("edit-trial-row").style.display  = isTrial  ? "" : "none";
+
+  /* Pre-fill dates */
+  if (isActive && selectedUser) {
+    var d = selectedUser.plan_expires_at
+      ? new Date(selectedUser.plan_expires_at)
+      : new Date(Date.now() + 30*24*60*60*1000);
+    document.getElementById("edit-expiry-input").value = d.toISOString().split("T")[0];
+    if (selectedUser.current_plan && !_editPlan) selectPlan(selectedUser.current_plan, true);
+  }
+  if (isTrial && selectedUser) {
+    var td = selectedUser.trial_ends_at
+      ? new Date(selectedUser.trial_ends_at)
+      : new Date(Date.now() + 14*24*60*60*1000);
+    document.getElementById("edit-trial-input").value = td.toISOString().split("T")[0];
+  }
+
+  if (!init) _enableSaveBtn();
+}
+
+function selectPlan(plan, init) {
+  _editPlan = plan;
+  document.querySelectorAll(".plan-btn").forEach(function(b){ b.className="plan-btn"; });
+  var btn = document.querySelector('[data-plan="'+plan+'"]');
+  if (btn) btn.className = "plan-btn selected";
+  if (!init) _enableSaveBtn();
+}
+
+function _enableSaveBtn() {
+  var btn = document.getElementById("sub-save-btn");
+  btn.disabled = false;
+  btn.style.opacity = "1";
+}
+
+async function saveSubEdit() {
+  if (!selectedUser || !_editStatus) return;
+  var btn = document.getElementById("sub-save-btn");
+  var msg = document.getElementById("sub-edit-msg");
+  btn.textContent = "Saving…"; btn.disabled = true; btn.style.opacity = "0.6";
+  msg.style.display = "none";
+
+  try {
+    var patch = { subscription_status: _editStatus };
+
+    if (_editStatus === "active") {
+      if (!_editPlan) { throw new Error("Select a plan (monthly or annual)."); }
+      patch.current_plan    = _editPlan;
+      var expiryVal = document.getElementById("edit-expiry-input").value;
+      patch.plan_expires_at = expiryVal ? new Date(expiryVal).toISOString() : null;
+    } else {
+      /* Clear active-only fields when removing pro */
+      patch.current_plan    = null;
+      patch.plan_expires_at = null;
+    }
+
+    if (_editStatus === "trial") {
+      var trialVal = document.getElementById("edit-trial-input").value;
+      if (trialVal) patch.trial_ends_at = new Date(trialVal).toISOString();
+    }
+
+    var { error } = await SB.from("profiles").update(patch).eq("id", selectedUser.id);
+    if (error) throw error;
+
+    /* Update local cache */
+    Object.assign(selectedUser, patch);
+    var idx = allUsers.findIndex(function(u){ return u.id===selectedUser.id; });
+    if (idx >= 0) allUsers[idx] = Object.assign({}, allUsers[idx], patch);
+
+    /* Refresh read-only display */
+    document.getElementById("pd-status").innerHTML = statusBadge(selectedUser);
+    document.getElementById("pd-plan").textContent = selectedUser.current_plan || "—";
+    document.getElementById("pd-expires").textContent = selectedUser.plan_expires_at ? fmtDateTime(selectedUser.plan_expires_at) : "—";
+    document.getElementById("pd-trial").textContent   = selectedUser.trial_ends_at   ? fmtDateTime(selectedUser.trial_ends_at)   : "—";
+
+    renderUsersTable(document.getElementById("user-search").value||"");
+    loadOverview();
+
+    msg.textContent = "✓ Saved";
+    msg.style.color = "var(--green)";
+    msg.style.display = "block";
+    btn.textContent = "Save Changes"; btn.disabled = false; btn.style.opacity = "1";
+    showToast("Subscription updated for " + selectedUser.email, "green");
+
+  } catch(e) {
+    msg.textContent = e.message || "Save failed.";
+    msg.style.color = "var(--red)";
+    msg.style.display = "block";
+    btn.textContent = "Save Changes"; btn.disabled = false; btn.style.opacity = "1";
+  }
+}
+
+function closePanel(e) {
+  if (e.target === document.getElementById("user-panel")) closePanelDirect();
+}
+function closePanelDirect() {
+  document.getElementById("user-panel").classList.remove("open");
+  document.getElementById("delete-confirm-box").style.display = "none";
+  selectedUser = null;
+}
+
+function copyId() {
+  var id = document.getElementById("pd-id").textContent;
+  navigator.clipboard.writeText(id).then(function(){
+    document.getElementById("pd-id").textContent = "Copied!";
+    setTimeout(function(){ document.getElementById("pd-id").textContent = id; }, 1200);
+  });
+}
+
+function toggleDeleteConfirm() {
+  var box = document.getElementById("delete-confirm-box");
+  box.style.display = box.style.display === "none" ? "block" : "none";
+}
+
+async function deleteSelectedUser() {
+  if (!selectedUser) return;
+  var btn = document.getElementById("delete-exec-btn");
+  btn.textContent = "Deleting…"; btn.disabled = true;
+
+  try {
+    /* Delete data rows first */
+    await SB.from("user_data").delete().eq("user_id", selectedUser.id);
+    await SB.from("usage_daily").delete().eq("user_id", selectedUser.id);
+    await SB.from("usage_monthly").delete().eq("user_id", selectedUser.id);
+    await SB.from("profiles").delete().eq("id", selectedUser.id);
+
+    /* Delete auth user via Supabase Admin API */
+    var res = await fetch(CFG.url + "/auth/v1/admin/users/" + selectedUser.id, {
+      method: "DELETE",
+      headers: { "apikey": CFG.key, "Authorization": "Bearer " + CFG.key }
+    });
+    if (!res.ok) {
+      var err = await res.text();
+      throw new Error("Auth delete failed: " + err);
+    }
+
+    var deletedId = selectedUser.id;
+    closePanelDirect();
+    allUsers = allUsers.filter(function(u){ return u.id !== deletedId; });
+    renderUsersTable();
+    await loadOverview();
+    showToast("User deleted", "green");
+  } catch(e) {
+    showToast("Delete failed: " + e.message, "red");
+    btn.textContent = "Delete"; btn.disabled = false;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   WORKER PING
+════════════════════════════════════════════════════════════ */
+async function pingWorker() {
+  if (!CFG.worker) { setWkStatus("yellow", "No URL"); return; }
+  setWkStatus("yellow", "Pinging…");
+  document.getElementById("worker-status-text").textContent = "Pinging…";
+  try {
+    var t0 = Date.now();
+    var res = await fetch(CFG.worker + "/beta-status", { method: "GET", signal: AbortSignal.timeout(5000) });
+    var ms = Date.now() - t0;
+    if (res.ok || res.status === 403) {
+      setWkStatus("green", ms + "ms");
+      document.getElementById("worker-status-text").textContent = "Online — " + ms + "ms";
+    } else {
+      throw new Error("HTTP " + res.status);
+    }
+  } catch(e) {
+    setWkStatus("red", "Offline");
+    document.getElementById("worker-status-text").textContent = "Offline — " + e.message;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   HELPERS
+════════════════════════════════════════════════════════════ */
+function setStatEl(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function statusBadge(u) {
+  if (!u) return '<span class="badge expired">Unknown</span>';
+  var s = u.subscription_status;
+  var isTrialExpired = s === "trial" && new Date(u.trial_ends_at) <= new Date();
+  if (s === "active") return '<span class="badge active"><span class="badge-dot" style="background:var(--green)"></span>Active</span>';
+  if (s === "trial" && !isTrialExpired) {
+    var days = Math.ceil((new Date(u.trial_ends_at) - new Date()) / 86400000);
+    return '<span class="badge trial"><span class="badge-dot" style="background:var(--yellow)"></span>Trial (' + days + 'd)</span>';
+  }
+  if (s === "canceled") return '<span class="badge canceled">Canceled</span>';
+  return '<span class="badge expired"><span class="badge-dot" style="background:var(--red)"></span>Expired</span>';
+}
+
+function fmtDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+}
+function fmtDateTime(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-US",{month:"short",day:"numeric",year:"numeric",hour:"numeric",minute:"2-digit"});
+}
+
+function showToast(msg, color) {
+  var t = document.createElement("div");
+  t.textContent = msg;
+  t.style.cssText = [
+    "position:fixed","bottom:28px","right:28px","z-index:9999",
+    "background:var(--surf)","border:1px solid var(--" + color + ")",
+    "color:var(--" + color + ")","font-size:13px","font-weight:600",
+    "padding:12px 20px","border-radius:10px",
+    "box-shadow:0 4px 24px rgba(0,0,0,0.5)",
+    "transition:opacity 0.3s ease","font-family:'DM Sans',sans-serif"
+  ].join(";");
+  document.body.appendChild(t);
+  setTimeout(function(){ t.style.opacity="0"; setTimeout(function(){t.remove();},300); }, 3000);
+}
+</script>
+</body>
+</html>
