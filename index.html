@@ -140,7 +140,7 @@
     "lk_theme", "lk_homeLayout", "lk_restEnabled", "lk_hidePartials",
     "lk_voiceEnabled", "lk_voiceBtnCorner", "lk_tutorialSeen",
     "lk_refeedAccepted", "lk_refeedDismissed", "lk_fuelSettings",
-    "lk_gamingLayer", "lk_splitsExpanded"
+    "lk_gamingLayer", "lk_splitsExpanded", "lk_mcFuelAdjust"
   ];
   /* ---- Cycle tracking: OPT-IN sync only ----
      lk_mcProfile / lk_mcDays stay device-local unless the user explicitly
@@ -8892,6 +8892,7 @@ function FuelTab(p){
   var [fuelProfile,setFuelProfileRaw]=useState(function(){return ld("fuelProfile",null);});
   var [weightLog,setWeightLog]=useState(function(){return getWeightLog();});
   var [showRefeed,setShowRefeed]=useState(false);
+  var [cycleFuelOn,setCycleFuelOn]=useState(function(){return mcFuelAdjustOn();});
   var [refeedActive,setRefeedActive]=useState(function(){return ld("refeedAccepted",null)===new Date().toISOString().slice(0,10);});
   var fs=getFuelSettings(); /* re-read each render; lockedFuelUpdate triggers re-render */
 
@@ -8928,6 +8929,14 @@ function FuelTab(p){
     /* shift 15% of fat calories into carbs on training days; protein and total unchanged */
     var shiftCal=Math.round(0.15*targets.cal*0.25);
     targets=Object.assign({},targets,{carb:targets.carb+Math.round(shiftCal/4),fat:Math.max(0,targets.fat-Math.round(shiftCal/9))});
+  }
+  /* Cycle-aware fuelling. The context strip always shows; the calorie
+     bump only applies when the user has opted in (see mcFuelContext). */
+  var cycleCtx=mcFuelContext(p.profile);
+  var cycleBump=0;
+  if(cycleCtx&&cycleCtx.calAdj&&cycleFuelOn){
+    cycleBump=mcLutealCalBump(targets.cal);
+    targets=Object.assign({},targets,{cal:targets.cal+cycleBump,carb:targets.carb+Math.round(cycleBump/4)});
   }
 
   useEffect(function(){if(refeedTriggered&&!refeedActive){setShowRefeed(true);}},[]);
@@ -9017,7 +9026,7 @@ function FuelTab(p){
               return (
                 <div key={m.label}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                    <span style={{fontSize:11,color:MU}}>{m.label}{m.label==="Carbs"&&trainedToday&&<span style={{marginLeft:5,fontSize:9,fontWeight:700,background:"#F59E0B22",color:"#F59E0B",borderRadius:3,padding:"1px 5px"}}>training day</span>}</span>
+                    <span style={{fontSize:11,color:MU}}>{m.label}{m.label==="Carbs"&&trainedToday&&<span style={{marginLeft:5,fontSize:9,fontWeight:700,background:"#F59E0B22",color:"#F59E0B",borderRadius:3,padding:"1px 5px"}}>training day</span>}{m.label==="Carbs"&&cycleBump>0&&<span style={{marginLeft:5,fontSize:9,fontWeight:700,background:MC_COL.luteal+"22",color:MC_TXT.luteal,borderRadius:3,padding:"1px 5px"}}>luteal +{cycleBump}</span>}</span>
                     {!fs.hideNumbers&&<span style={{fontSize:11,fontWeight:700,color:TX}}>{m.val}<span style={{color:MU,fontWeight:400}}>/{m.target}g</span></span>}
                   </div>
                   <div style={{height:5,background:SU,borderRadius:3,overflow:"hidden"}}>
@@ -9029,6 +9038,14 @@ function FuelTab(p){
             })}
           </div>
         </div>
+        {cycleCtx&&(function(){
+          var nut=sumDayNutrients(day);
+          var goals=nutrientTargets(p.profile,targets.cal);
+          var ironGoal=(goals&&goals.iron&&goals.iron.goal)||18;
+          return <McFuelStrip ctx={cycleCtx} baseCal={targets.cal-cycleBump}
+            iron={{have:Math.round((nut.totals.iron||0)*10)/10,goal:ironGoal,partial:!!nut.missing.iron}}
+            onChange={function(v){setCycleFuelOn(v);}}/>;
+        })()}
         <WaterCard waterMl={waterMl} addWater={addWater} setDay={setDay} fuelProfile={fuelProfile} history={p.history}/>
         <WeightLogCard weightLog={weightLog} useKg={p.useKg} onLog={handleWeightLog} fuelProfile={fuelProfile}/>
         <TdeeReportCard/>
@@ -17192,7 +17209,104 @@ function McNutritionCard(p){
         <p style={{fontSize:11,fontWeight:800,color:col,letterSpacing:"0.08em"}}>FUEL</p>
       </div>
       <p style={{fontSize:13.5,color:TX,lineHeight:1.55,paddingRight:16}}>{body}</p>
+      {(function(){
+        if(ph==="menstrual")return <p style={{fontSize:11.5,color:MU,lineHeight:1.45,marginTop:7}}>Fuel is tracking your iron against the 18 mg daily target while you're bleeding.</p>;
+        if(ph==="luteal")return <p style={{fontSize:11.5,color:MU,lineHeight:1.45,marginTop:7}}>{mcFuelAdjustOn()?"Fuel is adding a small calorie allowance this phase.":"You can let Fuel add a small calorie allowance this phase — it's off by default."}</p>;
+        return null;
+      })()}
       <button onClick={function(){p.go("fuel");}} style={{marginTop:10,background:"none",border:"none",color:col,fontSize:12.5,fontWeight:700,cursor:"pointer",padding:0}}>Open Fuel ›</button>
+    </div>
+  );
+}
+
+/* -- FUEL INTEGRATION -------------------------------------------------
+   Connects the cycle to the nutrition engine. Two separate things, kept
+   separate on purpose:
+
+   1. CONTEXT (always on when tracking): the Fuel tab explains what the
+      current phase means for fuelling, and during menstruation it puts
+      iron front and centre — the nutrient panel already tracks iron
+      against an 18 mg female RDA, and menstrual losses are exactly when
+      that number matters.
+   2. TARGET ADJUSTMENT (opt-in, default off): resting metabolic rate
+      runs modestly higher in the luteal phase. Users can let that nudge
+      the daily calorie target, but nothing changes their numbers
+      silently — this app is used by people who count, and a target that
+      moves on its own without consent is not acceptable. */
+function mcFuelAdjustOn(){return ld("mcFuelAdjust",false)===true;}
+function mcFuelContext(profile){
+  if(!isFemaleUser(profile))return null;
+  var mcp=mcGetProfile();
+  if(!mcp||!mcp.setup||mcp.discreet)return null;
+  var days=mcGetDays();
+  var C=mcCompute(mcp,days);
+  if(C.day==null)return null;
+  var ph=C.phaseOfDay(C.day);
+  var out={day:C.day,phase:ph,hbc:C.hbc,recovery:!!C.pregRecovery,
+    name:C.hbc?(ph==="menstrual"?"Bleed":"Tracking"):MC_PHASE_INFO[ph].name,
+    ironFocus:false,calAdj:0,tip:""};
+  if(C.pregRecovery){
+    out.tip="Your cycle is resetting. Eat normally and don't cut hard right now — recovery needs fuel.";
+    out.ironFocus=true;
+    return out;
+  }
+  if(ph==="menstrual"){
+    out.ironFocus=true;
+    out.tip="You lose iron while bleeding. Red meat, lentils, spinach or eggs help top it back up — pair them with vitamin C to absorb more.";
+  } else if(ph==="luteal"){
+    out.tip="Late-cycle appetite often rises, and resting metabolism runs a little higher. Extra hunger here is physiology, not a lapse.";
+    if(mcFuelAdjustOn())out.calAdj=1;   /* resolved against the real target below */
+  } else if(ph==="ovulatory"){
+    out.tip="Appetite often dips around ovulation. Keep fuelling around training — performance still needs carbs.";
+  } else {
+    out.tip="Estrogen is climbing and energy often follows. A good stretch to fuel training properly.";
+  }
+  return out;
+}
+/* Modest, capped: ~5% of the day's target, never more than 150 kcal. */
+function mcLutealCalBump(baseCal){
+  return Math.min(150,Math.round((baseCal||2200)*0.05/10)*10);
+}
+
+function McFuelStrip(p){
+  var ctx=p.ctx;
+  var [on,setOn]=useState(function(){return mcFuelAdjustOn();});
+  if(!ctx)return null;
+  var col=MC_COL[ctx.phase]||MC_COL.neutral;
+  var txt=MC_TXT[ctx.phase]||MC_TXT.neutral;
+  var bump=ctx.phase==="luteal"&&!ctx.hbc&&!ctx.recovery?mcLutealCalBump(p.baseCal):0;
+  return (
+    <div style={{background:CARD,borderRadius:14,border:"1px solid "+BORD,borderLeft:"3px solid "+col,padding:"12px 14px",marginTop:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:6}}>
+        <Ic d={D.drop} z={13} c={txt}/>
+        <p style={{fontSize:10.5,fontWeight:800,color:txt,letterSpacing:"0.08em"}}>
+          {ctx.recovery?"CYCLE RESET":(ctx.name.toUpperCase()+" · DAY "+ctx.day)}
+        </p>
+      </div>
+      <p style={{fontSize:12.5,color:TX,lineHeight:1.5}}>{ctx.tip}</p>
+      {ctx.ironFocus&&p.iron&&(
+        <div style={{marginTop:9}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+            <span style={{fontSize:11,color:MU}}>Iron today</span>
+            <span style={{fontSize:11,fontWeight:700,color:TX}}>{p.iron.have}<span style={{color:MU,fontWeight:400}}>/{p.iron.goal} mg</span></span>
+          </div>
+          <div style={{height:5,background:SU,borderRadius:3,overflow:"hidden"}}>
+            <div style={{height:"100%",width:Math.min(p.iron.have/p.iron.goal,1)*100+"%",background:MC_COL.menstrual,borderRadius:3,transition:"width .3s"}}/>
+          </div>
+          {p.iron.partial&&<p style={{fontSize:10,color:MU,marginTop:3}}>Only counts foods with iron data — some logged items don't carry it.</p>}
+        </div>
+      )}
+      {ctx.phase==="luteal"&&!ctx.hbc&&!ctx.recovery&&(
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginTop:10,paddingTop:9,borderTop:"1px solid "+BORD}}>
+          <div style={{flex:1}}>
+            <p style={{fontSize:12,fontWeight:600,color:TX}}>Add {bump} kcal in this phase</p>
+            <p style={{fontSize:10.5,color:MU,marginTop:1,lineHeight:1.4}}>{on?"Applied to today's target.":"Off — your target stays as calculated."}</p>
+          </div>
+          <button aria-pressed={on} aria-label="Adjust calorie target during the luteal phase" onClick={function(){var n=!on;setOn(n);sd("mcFuelAdjust",n);if(p.onChange)p.onChange(n);}} style={{width:44,height:25,borderRadius:13,border:"none",background:on?col:SU,cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
+            <div style={{width:19,height:19,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:on?22:3,transition:"left .2s"}}/>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
