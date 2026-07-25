@@ -140,7 +140,7 @@
     "lk_theme", "lk_homeLayout", "lk_restEnabled", "lk_hidePartials",
     "lk_voiceEnabled", "lk_voiceBtnCorner", "lk_tutorialSeen",
     "lk_refeedAccepted", "lk_refeedDismissed", "lk_fuelSettings",
-    "lk_gamingLayer", "lk_splitsExpanded"
+    "lk_gamingLayer", "lk_splitsExpanded", "lk_mcFuelAdjust"
   ];
   /* ---- Cycle tracking: OPT-IN sync only ----
      lk_mcProfile / lk_mcDays stay device-local unless the user explicitly
@@ -1595,6 +1595,12 @@ var CSS=[
 
 ].join("");
 
+/* CSS_THEME carries the design-system v3 tokens (--ds-*) and the .ds-* classes.
+   It was declared but never injected, so every primitive built on those tokens
+   rendered with an empty background and unstyled headings. It goes first: the
+   CSS array re-declares the --color-* variables and must keep winning. */
+var CSS_ALL=CSS_THEME+CSS;
+
 /* -- STORAGE ---------------------------------------------------------- */
 var storageAvailable=false;
 try{localStorage.setItem("test",1);localStorage.removeItem("test");storageAvailable=true;}catch(e){}
@@ -2733,7 +2739,7 @@ var Nav=React.memo(function(p){
     {id:"profile", label:"Profile", d:D.profile},
   ];
   return (
-    <nav style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:420,background:"rgba(10,10,12,0.78)",borderTop:"1px solid "+BORD,display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom, 20px)",paddingTop:10,backdropFilter:"saturate(180%) blur(20px)",WebkitBackdropFilter:"saturate(180%) blur(20px)"}} role="navigation" aria-label="Main navigation">
+    <nav style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:420,background:MATERIAL,borderTop:"0.5px solid "+SEP,display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom, 20px)",paddingTop:10,backdropFilter:"saturate(180%) blur(20px)",WebkitBackdropFilter:"saturate(180%) blur(20px)"}} role="navigation" aria-label="Main navigation">
       {tabs.map(function(t){
         var on=p.active===t.id;
         return (
@@ -4799,22 +4805,20 @@ function TrainHub(p){
           </div>
         </div>
       )}
-      <div style={{padding:"52px 20px 0",background:SURF}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <h1 style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:32,fontWeight:800,letterSpacing:"0.04em"}}>TRAIN</h1>
-          <div style={{display:"flex",gap:6}}>
-            <button onClick={function(){if(p.onCardio)p.onCardio();}} style={{padding:"8px 12px",borderRadius:10,border:"1px solid "+OR_H+"40",background:OR_H+"12",color:OR,fontFamily:"Barlow Condensed,sans-serif",fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
-              <Ic d={D.run} z={14} c={OR}/> Cardio
-            </button>
-            <button onClick={function(){p.onStart({name:"Quick Workout",exIds:[]});}} style={{padding:"8px 14px",borderRadius:10,border:"none",background:"linear-gradient(135deg,"+OR_H+",#EA580C)",color:"#fff",fontFamily:"Barlow Condensed,sans-serif",fontSize:14,fontWeight:700,cursor:"pointer"}}>Quick Start</button>
-          </div>
-        </div>
-        <div style={{display:"flex",borderBottom:"1px solid "+BORD}}>
-          {[["splits","My Splits"],["history","History"],["library","Library"]].map(function(t){
-            return <button key={t[0]} onClick={function(){t[0]==="library"?setView("library"):setTab(t[0]);}} style={{flex:1,padding:"11px 0",background:"none",border:"none",cursor:"pointer",color:tab===t[0]?OR:MU,fontSize:14,fontWeight:600,borderBottom:"2px solid "+(tab===t[0]?OR:"transparent")}}>{t[1]}</button>;
-          })}
-        </div>
-      </div>
+      <DsHeader title="Train" bottom={S3} actions={
+        <button onClick={function(){if(p.onCardio)p.onCardio();}} aria-label="Log cardio"
+          style={{width:38,height:38,borderRadius:"50%",border:"none",background:FILL_SOFT,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Ic d={D.run} z={17} c={TX}/>
+        </button>
+      }>
+        <button onClick={function(){p.onStart({name:"Quick Workout",exIds:[]});}}
+          style={{width:"100%",marginTop:S4,padding:"14px",borderRadius:R_MD,border:"none",background:"linear-gradient(135deg,"+OR_H+",#EA580C)",color:"#fff",fontFamily:FONT_D,fontSize:T_HEAD,fontWeight:800,letterSpacing:"0.03em",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:S2}}>
+          <Ic d={D.train} z={19} c="#fff"/> QUICK START
+        </button>
+        <DsSegmented label="Train section" value={tab} style={{marginTop:S4}}
+          options={[{id:"splits",label:"Splits"},{id:"history",label:"History"},{id:"library",label:"Library"}]}
+          onChange={function(v){v==="library"?setView("library"):setTab(v);}}/>
+      </DsHeader>
       <McTrainBanner profile={p.profile} go={p.go}/>
       <div style={{padding:"18px 20px"}}>
         {tab==="splits"&&p.history&&p.history.length>0&&(function(){
@@ -6636,25 +6640,28 @@ function ProgressPage(p){
 
   return (
     <div style={{paddingBottom:80}}>
-      <div style={{padding:"52px 20px 0",background:"linear-gradient(180deg,#8B5CF6"+"18 0%,transparent 100%)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
-          <button onClick={function(){p.go("home");}} style={{background:"none",border:"none",cursor:"pointer"}}><Ic d={D.back} z={22}/></button>
-          <h1 style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:32,fontWeight:800,letterSpacing:"0.04em",color:TX}}>PROGRESS</h1>
-        </div>
-        <div style={{display:"flex",gap:6,marginBottom:14,overflowX:"auto"}}>
+      <DsHeader title="Progress" tint="#8B5CF6" bottom={S3} actions={
+        <button onClick={function(){p.go("home");}} aria-label="Back to home"
+          style={{width:38,height:38,borderRadius:"50%",border:"none",background:FILL_SOFT,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Ic d={D.back} z={18} c={TX}/>
+        </button>
+      }>
+        {/* five destinations is one too many for an equal-width segmented
+            control on a phone — a scrolling pill row keeps every label legible */}
+        <div role="tablist" aria-label="Progress section" style={{display:"flex",gap:S2,marginTop:S4,overflowX:"auto",paddingBottom:2}}>
           {[["overview","Overview"],["goals","Goals"],["calendar","Calendar"],["photos","Photos"],["prs","PR Vault"]].map(function(t){
             var act=tab===t[0];
-            return <button key={t[0]} onClick={function(){setTab(t[0]);}} style={{padding:"7px 16px",borderRadius:20,border:"1px solid "+(act?"#8B5CF6":BORD),background:act?"#8B5CF6":"transparent",color:act?"#fff":MU,fontSize:13,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{t[1]}</button>;
+            return <button key={t[0]} role="tab" aria-selected={act} onClick={function(){setTab(t[0]);}} style={{padding:"7px 15px",borderRadius:999,border:"none",background:act?"#8B5CF6":FILL_SOFT,color:act?"#fff":MU,fontSize:T_FOOT,fontWeight:act?600:500,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,transition:"background .18s ease"}}>{t[1]}</button>;
           })}
         </div>
-      </div>
+      </DsHeader>
       <div style={{padding:"0 20px"}}>
 
         {tab==="overview"&&(
           <div>
-            <p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:18,fontWeight:800,color:TX,marginBottom:12}}>FEATURED LIFTS</p>
+            <p className="ds-section-hd">FEATURED LIFTS</p>
             {featuredIds.length===0&&(
-              <div style={{background:CARD,borderRadius:14,padding:"20px",border:"1px solid "+BORD,textAlign:"center",marginBottom:14}}>
+              <div style={{background:ELEV,borderRadius:R_LG,padding:S5,textAlign:"center",marginBottom:14}}>
                 <p style={{color:MU,fontSize:13,marginBottom:10}}>Track your key lifts here. Add exercises to see Day 1 vs current PR.</p>
               </div>
             )}
@@ -6696,7 +6703,7 @@ function ProgressPage(p){
               <Ic d={D.plus} z={14} c="#8B5CF6"/> ADD LIFT
             </button>
 
-            <p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:18,fontWeight:800,color:TX,marginBottom:12}}>BODY WEIGHT</p>
+            <p className="ds-section-hd">BODY WEIGHT</p>
             {graphData.length>1?(
               <div style={{background:CARD,borderRadius:14,padding:"14px",border:"1px solid "+BORD,marginBottom:20}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
@@ -6739,7 +6746,7 @@ function ProgressPage(p){
                 </div>
               </div>
             ):(
-              <div style={{background:CARD,borderRadius:14,padding:"20px",border:"1px solid "+BORD,textAlign:"center",marginBottom:20}}>
+              <div style={{background:ELEV,borderRadius:R_LG,padding:S5,textAlign:"center",marginBottom:20}}>
                 <p style={{color:MU,fontSize:13}}>Log your body weight in the Fuel tab to see your trend here.</p>
               </div>
             )}
@@ -7066,54 +7073,74 @@ function ProfileScreen(p){
           <button onClick={function(){window.LOCKED.upgradeFromGuest();}} style={{padding:"9px 18px",borderRadius:11,border:"none",background:"linear-gradient(135deg,"+OR_H+",#EA580C)",color:"#fff",fontFamily:"Barlow Condensed,sans-serif",fontSize:14,fontWeight:800,letterSpacing:"0.05em",cursor:"pointer",flexShrink:0}}>SIGN UP</button>
         </div>
       )}
-      <div style={{padding:(isGuest?"18px":"52px")+" 20px 18px",background:"linear-gradient(180deg,"+OR_H+"20 0%,transparent 100%)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:18}}>
-          <div style={{width:62,height:62,borderRadius:"50%",background:"linear-gradient(135deg,"+OR_H+","+ORD_H+")",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Barlow Condensed,sans-serif",fontSize:26,fontWeight:800,color:"#fff",flexShrink:0}}>{(p.profile.displayName||"A")[0].toUpperCase()}</div>
-          <div style={{flex:1}}><p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:24,fontWeight:800,letterSpacing:"0.035em",lineHeight:1,color:TX}}>{p.profile.displayName}</p><p style={{color:MU,fontSize:13,marginTop:3}}>@{p.profile.username}</p></div>
-          <button onClick={function(){p.go("settings");}} style={{padding:"7px 13px",borderRadius:9,border:"1px solid "+BORD,background:"transparent",color:MU,fontSize:13,cursor:"pointer"}}>Settings</button>
-        </div>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:CARD,borderRadius:12,padding:"11px 15px",border:"1px solid "+BORD,marginBottom:11}}>
-          <p style={{fontSize:13,fontWeight:600,color:TX}}>Weight Unit</p>
-          <button onClick={p.toggleUnit} style={{padding:"6px 14px",borderRadius:20,border:"1px solid "+OR_H+"50",background:OR_H+"15",color:OR,fontSize:13,fontWeight:700,cursor:"pointer"}}>{useKg?"KG - Switch to LBS":"LBS - Switch to KG"}</button>
-        </div>
-        <div style={{background:CARD,borderRadius:12,padding:"13px 15px",border:"1px solid "+BORD}}>
-          <p style={{fontSize:13,fontWeight:600,color:TX,marginBottom:12}}>App Style</p>
-          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-            {THEMES.map(function(t){
-              var isActive=activeTheme===t.id;
-              return (
-                <button key={t.id} onClick={function(){setTheme(t.id);}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0,opacity:isActive?1:0.7}}>
-                  <div style={{width:44,height:44,borderRadius:12,background:t.bg,border:"2px solid "+(isActive?OR_H:"transparent"),boxShadow:isActive?"0 0 0 1px "+OR_H+",0 4px 12px rgba(0,0,0,0.3)":"0 2px 8px rgba(0,0,0,0.3)",position:"relative",overflow:"hidden",transition:"all 0.2s"}}>
-                    <div style={{position:"absolute",bottom:0,right:0,width:24,height:24,background:t.card,borderRadius:"8px 0 0 0"}}/>
-                    <div style={{position:"absolute",bottom:6,right:6,width:8,height:8,borderRadius:2,background:t.accent}}/>
-                  </div>
-                  <p style={{fontSize:10,fontWeight:isActive?700:500,color:isActive?OR:MU,letterSpacing:"0.03em"}}>{t.label}</p>
-                </button>
-              );
+      <DsHeader title={p.profile.displayName||"Athlete"} eyebrow={"@"+(p.profile.username||"athlete")}
+        top={isGuest?S5:52} bottom={S4} tint={OR_H} actions={
+        <button onClick={function(){p.go("settings");}} aria-label="Settings"
+          style={{width:38,height:38,borderRadius:"50%",border:"none",background:FILL_SOFT,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Ic d={D.gear} z={18} c={TX}/>
+        </button>
+      }>
+        <div aria-hidden="true" style={{width:64,height:64,borderRadius:"50%",marginTop:S4,background:"linear-gradient(135deg,"+OR_H+","+ORD_H+")",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:FONT_D,fontSize:T_TITLE,fontWeight:800,color:"#fff"}}>{(p.profile.displayName||"A")[0].toUpperCase()}</div>
+      </DsHeader>
+      <div style={{padding:"0 20px"}}>
+        <DsSection>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:S3}}>
+            {[{label:"Workouts",value:history.length},{label:"PRs",value:prCount},{label:"Total Sets",value:totalSets},{label:"Volume",value:Math.round(totalVol/1000)+"k "+unit}].map(function(item,i){
+              return <DsCard key={i} radius={R_MD}><DsStat label={item.label} value={item.value||0} size={28} color={item.value>0?TX:MU}/></DsCard>;
             })}
           </div>
-        </div>
-      </div>
-      <div style={{padding:"0 20px"}}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:22}}>
-          {[{label:"Workouts",value:history.length},{label:"PRs",value:prCount},{label:"Total Sets",value:totalSets},{label:"Volume",value:Math.round(totalVol/1000)+"k "+unit}].map(function(item,i){
-            return <div key={i} style={{background:CARD,borderRadius:13,padding:"13px",border:"1px solid "+BORD}}><p style={{fontSize:11,color:MU,marginBottom:4}}>{item.label}</p><p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:24,fontWeight:800,color:item.value>0?TX:MU}}>{item.value||0}</p></div>;
-          })}
-        </div>
-        <p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:18,fontWeight:700,marginBottom:12,color:TX}}>Badges</p>
-        {badges.length===0&&<div style={{background:CARD,borderRadius:13,padding:"18px",border:"1px solid "+BORD,textAlign:"center",marginBottom:14}}><p style={{fontSize:14,color:MU}}>Log your first workout to earn a badge.</p></div>}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
-          {badges.map(function(b,i){return <div key={i} style={{background:b.col+"12",borderRadius:13,padding:"13px",border:"1px solid "+b.col+"30",display:"flex",gap:11,alignItems:"center"}}><div style={{width:38,height:38,borderRadius:10,background:b.col+"25",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Barlow Condensed,sans-serif",fontSize:14,fontWeight:900,color:b.col,flexShrink:0}}>{b.icon}</div><div><p style={{fontWeight:700,fontSize:13,color:b.col}}>{b.label}</p><p style={{fontSize:11,color:MU,marginTop:2,lineHeight:1.3}}>{b.desc}</p></div></div>;})}
-          {locked.map(function(b,i){return <div key={"l"+i} style={{background:CARD,borderRadius:13,padding:"13px",border:"1px solid "+BORD,display:"flex",gap:11,alignItems:"center",opacity:0.45}}><div style={{width:38,height:38,borderRadius:10,background:SU,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Barlow Condensed,sans-serif",fontSize:14,fontWeight:900,color:MU,flexShrink:0}}>{b.icon}</div><div><p style={{fontWeight:700,fontSize:13,color:MU}}>{b.label}</p><p style={{fontSize:11,color:MU,marginTop:2,lineHeight:1.3}}>{b.desc}</p></div></div>;})}
-        </div>
+        </DsSection>
+
+        <DsSection title="Preferences">
+          <DsCard pad={0}>
+            <DsRow label="Weight unit" strong trailing={
+              <button onClick={p.toggleUnit} style={{padding:"6px 13px",borderRadius:999,border:"none",background:OR_H+"1A",color:OR,fontSize:T_FOOT,fontWeight:600,cursor:"pointer",flexShrink:0}}>{useKg?"KG":"LBS"}</button>
+            }/>
+            <div style={{height:1,background:SEP,marginLeft:S4}}/>
+            <div style={{padding:S4}}>
+              <p style={{fontSize:T_SUB,color:TX,margin:"0 0 "+S3+"px"}}>App style</p>
+              <div style={{display:"flex",gap:S3,flexWrap:"wrap"}}>
+                {THEMES.map(function(t){
+                  var isActive=activeTheme===t.id;
+                  return (
+                    <button key={t.id} onClick={function(){setTheme(t.id);}} aria-pressed={isActive} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0,opacity:isActive?1:0.65}}>
+                      <div style={{width:44,height:44,borderRadius:12,background:t.bg,border:"2px solid "+(isActive?OR_H:"transparent"),boxShadow:isActive?"0 0 0 1px "+OR_H+",0 4px 12px "+SHADOW:"0 2px 8px "+SHADOW,position:"relative",overflow:"hidden",transition:"all 0.2s"}}>
+                        <div style={{position:"absolute",bottom:0,right:0,width:24,height:24,background:t.card,borderRadius:"8px 0 0 0"}}/>
+                        <div style={{position:"absolute",bottom:6,right:6,width:8,height:8,borderRadius:2,background:t.accent}}/>
+                      </div>
+                      <p style={{fontSize:T_CAP2,fontWeight:isActive?600:500,color:isActive?OR:MU}}>{t.label}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </DsCard>
+        </DsSection>
+
+        <DsSection title="Badges">
+          {badges.length===0&&<DsCard tone="soft" style={{textAlign:"center"}}><p style={{fontSize:T_FOOT,color:MU,margin:0}}>Log your first workout to earn a badge.</p></DsCard>}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:S3}}>
+            {badges.map(function(b,i){return <DsCard key={i} radius={R_MD} accent={b.col+"30"} style={{background:b.col+"12",display:"flex",gap:S3,alignItems:"center"}}><div style={{width:38,height:38,borderRadius:10,background:b.col+"25",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:FONT_D,fontSize:T_FOOT,fontWeight:900,color:b.col,flexShrink:0}}>{b.icon}</div><div style={{minWidth:0}}><p style={{fontWeight:600,fontSize:T_FOOT,color:b.col,margin:0}}>{b.label}</p><p style={{fontSize:T_CAP2,color:MU,margin:"2px 0 0",lineHeight:1.3}}>{b.desc}</p></div></DsCard>;})}
+            {locked.map(function(b,i){return <DsCard key={"l"+i} radius={R_MD} style={{display:"flex",gap:S3,alignItems:"center",opacity:0.45}}><div style={{width:38,height:38,borderRadius:10,background:FILL_SOFT,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:FONT_D,fontSize:T_FOOT,fontWeight:900,color:MU,flexShrink:0}}>{b.icon}</div><div style={{minWidth:0}}><p style={{fontWeight:600,fontSize:T_FOOT,color:MU,margin:0}}>{b.label}</p><p style={{fontSize:T_CAP2,color:MU,margin:"2px 0 0",lineHeight:1.3}}>{b.desc}</p></div></DsCard>;})}
+          </div>
+        </DsSection>
+
         {bestPRs.length>0&&(
-          <>
-            <p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:18,fontWeight:700,marginTop:20,marginBottom:12,color:TX}}>Personal Records</p>
-            {bestPRs.map(function(pr,i){
-              var dw=useKg?Math.round(pr.w*10)/10:Math.round(pr.w*2.20462*10)/10;
-              return <div key={i} style={{background:CARD,borderRadius:13,padding:"12px 14px",border:"1px solid "+BORD,marginBottom:8,display:"flex",alignItems:"center",gap:12}}><div style={{width:36,height:36,borderRadius:9,background:(pr.col||OR)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ic d={D.trophy} z={16} c={pr.col||OR}/></div><div style={{flex:1}}><p style={{fontWeight:600,fontSize:14,color:TX}}>{pr.name}</p><p style={{fontSize:11,color:MU,marginTop:1}}>{pr.muscle}</p></div><div style={{textAlign:"right"}}><p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:20,fontWeight:800,color:OR,lineHeight:1}}>{dw}<span style={{fontSize:12,fontWeight:400,color:MU}}>{useKg?"kg":"lb"}</span></p></div></div>;
-            })}
-          </>
+          <DsSection title="Personal Records">
+            <DsCard pad={0}>
+              {bestPRs.map(function(pr,i){
+                var dw=useKg?Math.round(pr.w*10)/10:Math.round(pr.w*2.20462*10)/10;
+                return (
+                  <React.Fragment key={i}>
+                    {i>0&&<div style={{height:1,background:SEP,marginLeft:56}}/>}
+                    <DsRow label={pr.name} detail={pr.muscle} strong
+                      leading={<div style={{width:34,height:34,borderRadius:9,background:(pr.col||OR)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ic d={D.trophy} z={15} c={pr.col||OR}/></div>}
+                      trailing={<p className="ds-num" style={{fontFamily:FONT_D,fontSize:T_HEAD,fontWeight:800,color:OR,margin:0,flexShrink:0}}>{dw}<span style={{fontSize:T_CAP,fontWeight:500,color:MU,marginLeft:2}}>{useKg?"kg":"lb"}</span></p>}/>
+                  </React.Fragment>
+                );
+              })}
+            </DsCard>
+          </DsSection>
         )}
       </div>
     </div>
@@ -7526,21 +7553,24 @@ function SettingsScreen(p){
   if(settingsView==="layout") return <LayoutEditor onBack={function(){setSettingsView("main");}}/>;
   return (
     <div style={{paddingBottom:80}}>
-      <div style={{padding:"52px 20px 18px",background:SURF}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><button onClick={function(){p.go("profile");}} style={{background:"none",border:"none",cursor:"pointer"}}><Ic d={D.back} z={22}/></button><h1 style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:26,fontWeight:800}}>Settings</h1></div>
-      </div>
-      <div style={{padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
-        <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.08em",paddingLeft:2,marginBottom:-4}}>PREFERENCES</p>
-        <div style={{background:CARD,borderRadius:16,padding:"15px",border:"1px solid "+BORD}}>
+      <DsHeader title="Settings" bottom={S3} actions={
+        <button onClick={function(){p.go("profile");}} aria-label="Back to profile"
+          style={{width:38,height:38,borderRadius:"50%",border:"none",background:FILL_SOFT,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Ic d={D.back} z={18} c={TX}/>
+        </button>
+      }/>
+      <div style={{padding:"0 20px 16px",display:"flex",flexDirection:"column",gap:S3}}>
+        <p className="ds-section-hd" style={{marginBottom:-4}}>PREFERENCES</p>
+        <div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
-              <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.06em",margin:"0 0 3px"}}>HOME LAYOUT</p>
+              <p style={{fontSize:T_CAP2,fontWeight:600,letterSpacing:"0.06em",textTransform:"uppercase",color:MU,margin:"0 0 3px"}}>HOME LAYOUT</p>
               <p style={{fontSize:12,color:MU,margin:0}}>Reorder blocks, hide widgets, pick quick actions</p>
             </div>
             <button onClick={function(){setSettingsView("layout");}} style={{padding:"9px 16px",borderRadius:11,border:"none",background:"linear-gradient(135deg,"+OR_H+",#EA580C)",color:"#fff",fontFamily:"Barlow Condensed,sans-serif",fontSize:14,fontWeight:800,letterSpacing:"0.04em",cursor:"pointer",flexShrink:0}}>CUSTOMIZE</button>
           </div>
         </div>
-        <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.08em",paddingLeft:2,marginBottom:-4}}>ACCOUNT</p>
+        <p className="ds-section-hd" style={{marginBottom:-4}}>ACCOUNT</p>
         {window.LOCKED&&window.LOCKED.isGuest&&(
           <div style={{background:OR_H+"14",borderRadius:13,padding:"15px",border:"1px solid "+OR_H+"40"}}>
             <p style={{fontSize:11,fontWeight:700,color:OR,letterSpacing:"0.06em",margin:"0 0 3px"}}>GUEST MODE</p>
@@ -7548,10 +7578,10 @@ function SettingsScreen(p){
             <button onClick={function(){window.LOCKED.upgradeFromGuest();}} style={{width:"100%",padding:"13px",borderRadius:9,border:"none",background:"linear-gradient(135deg,"+OR_H+",#EA580C)",color:"#fff",fontFamily:"Barlow Condensed,sans-serif",fontSize:16,fontWeight:800,letterSpacing:"0.08em",cursor:"pointer"}}>SIGN UP</button>
           </div>
         )}
-        {!(window.LOCKED&&window.LOCKED.isGuest)&&<div style={{background:CARD,borderRadius:13,padding:"15px",border:"1px solid "+BORD}}>
+        {!(window.LOCKED&&window.LOCKED.isGuest)&&<div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
             <div>
-              <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.06em",margin:"0 0 3px"}}>CLOUD SYNC</p>
+              <p style={{fontSize:T_CAP2,fontWeight:600,letterSpacing:"0.06em",textTransform:"uppercase",color:MU,margin:"0 0 3px"}}>CLOUD SYNC</p>
               <p style={{fontSize:12,color:MU,margin:0}}>
                 {syncStatus.lastSync
                   ? "Last synced "+new Date(syncStatus.lastSync).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})
@@ -7589,7 +7619,7 @@ function SettingsScreen(p){
             {syncLoading?"SYNCING…":"SYNC NOW"}
           </button>
         </div>}
-        {!(window.LOCKED&&window.LOCKED.isGuest)&&<div style={{background:CARD,borderRadius:13,padding:"15px",border:"1px solid "+BORD}}>
+        {!(window.LOCKED&&window.LOCKED.isGuest)&&<div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
           <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.06em",marginBottom:10}}>ACCOUNT</p>
           {acctEmail&&<p style={{fontSize:13,color:MU,marginBottom:12,wordBreak:"break-all"}}>{acctEmail}</p>}
           <button onClick={function(){if(window.LOCKED)window.LOCKED.signOut();}} style={{width:"100%",padding:"12px",borderRadius:9,border:"1px solid "+BORD,background:"transparent",color:TX,fontSize:14,fontWeight:600,cursor:"pointer",marginBottom:16}}>Sign Out</button>
@@ -7611,7 +7641,7 @@ function SettingsScreen(p){
             </button>
           </div>
         </div>}
-        <div style={{background:CARD,borderRadius:13,padding:"15px",border:"1px solid "+BORD}}>
+        <div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
           <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.06em",marginBottom:10}}>PROFILE</p>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div><p style={{fontSize:12,color:MU,marginBottom:5}}>Display name</p><input value={name} onChange={function(e){setName(e.target.value);}} style={{width:"100%",background:SU,border:"1px solid "+BORD,borderRadius:9,padding:"10px 12px",color:TX,fontSize:14,outline:"none"}}/></div>
@@ -7619,7 +7649,7 @@ function SettingsScreen(p){
             <button onClick={function(){if(name.trim())p.updateProfile({displayName:name.trim()});}} style={{padding:"10px",borderRadius:9,border:"none",background:OR,color:"#fff",fontFamily:"Barlow Condensed,sans-serif",fontSize:14,fontWeight:700,cursor:"pointer"}}>Save Name</button>
           </div>
         </div>
-        <div style={{background:CARD,borderRadius:13,padding:"15px",border:"1px solid "+BORD}}>
+        <div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
           <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.06em",marginBottom:12}}>ABOUT ME</p>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
             <div style={{display:"flex",gap:10}}>
@@ -7658,13 +7688,13 @@ function SettingsScreen(p){
             }} style={{padding:"11px",borderRadius:9,border:"none",background:OR,color:"#fff",fontFamily:"Barlow Condensed,sans-serif",fontSize:14,fontWeight:700,cursor:"pointer"}}>Save Stats</button>
           </div>
         </div>
-        <div style={{background:CARD,borderRadius:13,padding:"15px",border:"1px solid "+BORD}}>
+        <div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
           <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.06em",marginBottom:10}}>UNITS</p>
           <div style={{display:"flex",gap:10}}>
             {["kg","lbs"].map(function(u){var act=(p.useKg&&u==="kg")||(!p.useKg&&u==="lbs");return <button key={u} onClick={function(){if((u==="kg"&&!p.useKg)||(u==="lbs"&&p.useKg))p.toggleUnit();}} style={{flex:1,padding:"12px",borderRadius:9,border:"1.5px solid "+(act?OR:BORD),background:act?OR_H+"15":"transparent",color:act?OR:MU,fontFamily:"Barlow Condensed,sans-serif",fontSize:16,fontWeight:800,cursor:"pointer"}}>{u.toUpperCase()}</button>;})}
           </div>
         </div>
-        <div style={{background:CARD,borderRadius:13,padding:"15px",border:"1px solid "+BORD}}>
+        <div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
           <p style={{fontSize:11,fontWeight:700,color:"#8B5CF6",letterSpacing:"0.06em",marginBottom:10}}>WORKOUT TRACKING</p>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:SU,borderRadius:10,padding:"12px 14px",border:"1px solid "+BORD}}>
             <div>
@@ -7685,7 +7715,7 @@ function SettingsScreen(p){
             </button>
           </div>
         </div>
-        <div style={{background:CARD,borderRadius:13,padding:"15px",border:"1px solid "+BORD}}>
+        <div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
           <p style={{fontSize:11,fontWeight:700,color:OR,letterSpacing:"0.06em",marginBottom:10}}>VOICE COMMANDS</p>
           <p style={{fontSize:12,color:MU,lineHeight:1.5,marginBottom:12}}>Show the floating microphone button to log meals, water, workouts, and shopping items by voice. Drag the button to any corner.</p>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:SU,borderRadius:10,padding:"12px 14px",border:"1px solid "+BORD}}>
@@ -7699,7 +7729,7 @@ function SettingsScreen(p){
           </div>
         </div>
         <FuelDisplayCard/>
-        <div style={{background:CARD,borderRadius:13,padding:"15px",border:"1px solid "+BORD}}>
+        <div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
           <p style={{fontSize:11,fontWeight:700,color:"#EF4444",letterSpacing:"0.06em",marginBottom:10}}>PERFORMANCE TRACKING</p>
           <p style={{fontSize:12,color:MU,lineHeight:1.5,marginBottom:12}}>Enable cycle logging in the Fuel tab. Track compounds, doses, schedule, and get AI overviews. Cycle data is stored on your device and — if you're signed in — included in your encrypted cloud sync. It is never shared.</p>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:SU,borderRadius:10,padding:"12px 14px",border:"1px solid "+BORD}}>
@@ -7712,9 +7742,9 @@ function SettingsScreen(p){
             </button>
           </div>
         </div>
-        <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.08em",paddingLeft:2,marginBottom:-4}}>{"DATA & SYNC"}</p>
+        <p className="ds-section-hd" style={{marginBottom:-4}}>{"DATA & SYNC"}</p>
         <PrivacyCard/>
-        <div style={{background:CARD,borderRadius:13,padding:"15px",border:"1px solid "+BORD}}>
+        <div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
           <p style={{fontSize:11,fontWeight:700,color:OR,letterSpacing:"0.06em",marginBottom:4}}>EXPORT MY DATA</p>
           <p style={{fontSize:12,color:MU,lineHeight:1.5,marginBottom:12}}>Download your food diary, weight history, recipes, and settings. Your data is yours.</p>
           <div style={{display:"flex",gap:8}}>
@@ -7723,7 +7753,7 @@ function SettingsScreen(p){
           </div>
         </div>
         {!isBeta&&(
-        <div style={{background:CARD,borderRadius:13,padding:"15px",border:"1px solid "+BORD}}>
+        <div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
           <p style={{fontSize:11,fontWeight:700,color:"#8B5CF6",letterSpacing:"0.06em",marginBottom:10}}>BETA TESTING</p>
           <p style={{fontSize:12,color:MU,marginBottom:10}}>Have an invite code? Enter it to join the beta.</p>
           {!settingsBetaVerified&&(
@@ -7764,7 +7794,7 @@ function SettingsScreen(p){
         </div>
         )}
         {isBeta&&!isSilentBeta()&&(
-        <div style={{background:CARD,borderRadius:13,padding:"15px",border:"1px solid "+BORD}}>
+        <div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
           <p style={{fontSize:11,fontWeight:700,color:"#8B5CF6",letterSpacing:"0.06em",marginBottom:10}}>BETA</p>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
             <p style={{fontSize:13,color:TX}}>Status: <span style={{color:"#22C55E",fontWeight:700}}>Active</span></p>
@@ -7791,14 +7821,14 @@ function SettingsScreen(p){
           }} style={{width:"100%",padding:"11px",borderRadius:9,border:"1px solid #8B5CF650",background:"#8B5CF615",color:"#8B5CF6",fontSize:13,fontWeight:700,cursor:"pointer"}}>Force Refresh App</button>
         </div>
         )}
-        <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.08em",paddingLeft:2,marginBottom:-4}}>{"HELP & DANGER ZONE"}</p>
-        <div style={{background:CARD,borderRadius:13,padding:"15px",border:"1px solid "+BORD}}>
+        <p className="ds-section-hd" style={{marginBottom:-4}}>{"HELP & DANGER ZONE"}</p>
+        <div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
           <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.06em",marginBottom:10}}>HELP</p>
           <button onClick={function(){if(p.onShowTutorial)p.onShowTutorial();}} style={{width:"100%",padding:"13px",borderRadius:9,border:"1px solid "+OR_H+"40",background:OR_H+"10",color:OR,fontSize:14,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
             <span style={{fontSize:16}}>🎯</span> Replay Tutorial
           </button>
         </div>
-        <div style={{background:CARD,borderRadius:13,padding:"15px",border:"1px solid "+BORD}}>
+        <div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
           <p style={{fontSize:11,fontWeight:700,color:RE,letterSpacing:"0.06em",marginBottom:10}}>DANGER ZONE</p>
           <button onClick={function(){localStorage.clear();window.location.reload();}} style={{width:"100%",padding:"12px",borderRadius:9,border:"1px solid "+RE_H+"40",background:RE_H+"10",color:RE,fontSize:14,fontWeight:600,cursor:"pointer",marginBottom:8}}>Reset all data</button>
           {!deleteConfirm?(
@@ -7965,7 +7995,7 @@ function Onboarding(p){
 
   if(step===1) return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0A0A0B 0%,#1A0A02 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 28px"}}>
-      <style>{CSS}</style>
+      <style>{CSS_ALL}</style>
       <div style={{width:88,height:88,borderRadius:24,background:"linear-gradient(135deg,"+OR_H+","+ORD_H+")",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:32,boxShadow:"0 0 48px "+OR_H+"50"}}><Ic d={D.train} z={44} c="#fff"/></div>
       <h1 style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:58,fontWeight:800,letterSpacing:"0.05em",lineHeight:1,marginBottom:10,textAlign:"center",color:TX}}>LOCKED</h1>
       <p style={{color:MU,fontSize:15,textAlign:"center",lineHeight:1.6,maxWidth:280,marginBottom:30}}>The training app built around how serious lifters actually train.</p>
@@ -8009,7 +8039,7 @@ function Onboarding(p){
 
   if(step===2) return (
     <div style={{minHeight:"100vh",background:BG,padding:"60px 28px 40px"}}>
-      <style>{CSS}</style>
+      <style>{CSS_ALL}</style>
       <p style={{fontSize:12,color:OR,fontWeight:700,letterSpacing:"0.1em",marginBottom:8}}>STEP 1 OF 3</p>
       <h1 style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:34,fontWeight:800,letterSpacing:"0.04em",lineHeight:1,marginBottom:8,color:TX}}>Create your profile</h1>
       <p style={{color:MU,fontSize:14,lineHeight:1.5,marginBottom:28}}>How you appear in the app.</p>
@@ -8029,7 +8059,7 @@ function Onboarding(p){
 
   if(step===3) return (
     <div style={{minHeight:"100vh",background:BG,padding:"60px 28px 40px"}}>
-      <style>{CSS}</style>
+      <style>{CSS_ALL}</style>
       <p style={{fontSize:12,color:OR,fontWeight:700,letterSpacing:"0.1em",marginBottom:8}}>STEP 2 OF 3</p>
       <h1 style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:34,fontWeight:800,letterSpacing:"0.04em",lineHeight:1,marginBottom:8,color:TX}}>Choose your units</h1>
       <p style={{color:MU,fontSize:14,lineHeight:1.5,marginBottom:28}}>Change anytime in your profile.</p>
@@ -8050,7 +8080,7 @@ function Onboarding(p){
 
   return (
     <div style={{background:BG,paddingBottom:100}}>
-      <style>{CSS}</style>
+      <style>{CSS_ALL}</style>
       <div style={{position:"sticky",top:0,zIndex:50,background:"rgba(10,10,12,0.78)",borderBottom:"1px solid "+BORD,padding:"52px 20px 14px"}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <div style={{width:40,height:40,borderRadius:11,background:"linear-gradient(135deg,"+OR_H+","+ORD_H+")",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ic d={D.ai} z={18} c="#fff"/></div>
@@ -8414,13 +8444,12 @@ function FuelProfileSetup(p){
 
   return (
     <div style={{paddingBottom:100}}>
-      <div style={{padding:"52px 20px 20px",background:SURF}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>
-          {p.onBack&&<button onClick={p.onBack} style={{background:"none",border:"none",cursor:"pointer"}}><Ic d={D.back} z={22}/></button>}
-          <h1 style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:26,fontWeight:800,color:TX}}>Fuel Profile</h1>
-        </div>
-        <p style={{color:MU,fontSize:13,marginTop:2}}>Your stats power calorie and macro targets.</p>
-      </div>
+      <DsHeader title="Fuel Profile" size={T_TITLE} bottom={S5}
+        subtitle="Your stats power calorie and macro targets."
+        actions={p.onBack?
+          <button onClick={p.onBack} aria-label="Back to Fuel"
+            style={{width:38,height:38,borderRadius:"50%",border:"none",background:FILL_SOFT,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Ic d={D.back} z={18} c={TX}/></button>
+          :undefined}/>
       <div style={{padding:"0 20px",display:"flex",flexDirection:"column",gap:22}}>
         <div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -9012,14 +9041,14 @@ function TrendsTab(p){
   var trendArr=computeTrend(p.weightLog).slice(-range);
   return (
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:14,fontWeight:700,color:TX,letterSpacing:"0.06em",margin:0}}>NUTRITION TRENDS</p>
-        <div style={{display:"flex",gap:6}}>
-          {[7,30].map(function(r){var act=range===r;return <button key={r} onClick={function(){setRange(r);}} style={{padding:"4px 12px",borderRadius:8,border:"1px solid "+(act?OR:BORD),background:act?OR_H+"18":"transparent",color:act?OR:MU,fontSize:12,fontWeight:700,cursor:"pointer"}}>{r} days</button>;})}
-        </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:S3,marginBottom:S3}}>
+        <p className="ds-section-hd" style={{margin:0}}>Nutrition trends</p>
+        <DsSegmented label="Trend range" value={String(range)} style={{width:150,flexShrink:0}}
+          options={[{id:"7",label:"7 days"},{id:"30",label:"30 days"}]}
+          onChange={function(v){setRange(parseInt(v,10));}}/>
       </div>
-      <div style={{background:CARD,borderRadius:14,padding:"14px",border:"1px solid "+BORD,marginBottom:12}}>
-        <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.05em",marginBottom:8}}>CALORIES PER DAY VS TARGET</p>
+      <div style={{background:ELEV,borderRadius:R_LG,padding:S4,marginBottom:S3}}>
+        <p className="ds-section-hd">Calories per day vs target</p>
         <svg width="100%" height={110} viewBox={"0 0 "+(series.length*14+10)+" 110"} style={{overflow:"visible"}} aria-label="Daily calories bar chart">
           {p.calTarget>0&&<line x1={0} x2={series.length*14+10} y1={100-(p.calTarget/maxCal)*90} y2={100-(p.calTarget/maxCal)*90} stroke={MU} strokeWidth={1} strokeDasharray="4 3" opacity={0.6}/>}
           {series.map(function(d,i){
@@ -9029,20 +9058,20 @@ function TrendsTab(p){
         </svg>
         <p style={{fontSize:10,color:MU,marginTop:4}}>Dashed line = your target. Logged {logged.length} of {range} days.</p>
       </div>
-      <div style={{background:CARD,borderRadius:14,padding:"14px",border:"1px solid "+BORD,marginBottom:12}}>
-        <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.05em",marginBottom:8}}>DAILY AVERAGES (LOGGED DAYS)</p>
+      <div style={{background:ELEV,borderRadius:R_LG,padding:S4,marginBottom:S3}}>
+        <p className="ds-section-hd">Daily averages (logged days)</p>
         {logged.length===0?<p style={{fontSize:12,color:MU}}>Nothing logged in this window yet.</p>:(
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,fontVariantNumeric:"tabular-nums"}}>
             {[["cal","Calories",""],["pro","Protein","g"],["carb","Carbs","g"],["fat","Fat","g"],["fiber","Fiber","g"],["sodium","Sodium","mg"]].map(function(m){
               var v=avg(m[0]);
-              return <div key={m[0]} style={{textAlign:"center",background:SU,borderRadius:9,padding:"8px 4px"}}><p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:17,fontWeight:800,color:OR}}>{v!=null?v+m[2]:"—"}</p><p style={{fontSize:10,color:MU}}>{m[1]}</p></div>;
+              return <div key={m[0]} style={{textAlign:"center",background:FILL_SOFT,borderRadius:R_SM,padding:"9px 4px"}}><p className="ds-num" style={{fontFamily:FONT_D,fontSize:T_HEAD,fontWeight:800,color:OR,margin:0}}>{v!=null?v+m[2]:"—"}</p><p style={{fontSize:T_CAP2,color:MU,margin:"1px 0 0"}}>{m[1]}</p></div>;
             })}
           </div>
         )}
       </div>
       {trendArr.length>1&&(
-        <div style={{background:CARD,borderRadius:14,padding:"14px",border:"1px solid "+BORD}}>
-          <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.05em",marginBottom:8}}>WEIGHT TREND</p>
+        <div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
+          <p className="ds-section-hd">Weight trend</p>
           <svg width="100%" height={60} viewBox={"0 0 "+(trendArr.length*14+10)+" 60"} style={{overflow:"visible"}} aria-label="Weight trend line">
             {(function(){
               var min=trendArr.reduce(function(m,e){return Math.min(m,e.trend);},Infinity);
@@ -9065,6 +9094,7 @@ function FuelTab(p){
   var [fuelProfile,setFuelProfileRaw]=useState(function(){return ld("fuelProfile",null);});
   var [weightLog,setWeightLog]=useState(function(){return getWeightLog();});
   var [showRefeed,setShowRefeed]=useState(false);
+  var [cycleFuelOn,setCycleFuelOn]=useState(function(){return mcFuelAdjustOn();});
   var [refeedActive,setRefeedActive]=useState(function(){return ld("refeedAccepted",null)===new Date().toISOString().slice(0,10);});
   var fs=getFuelSettings(); /* re-read each render; lockedFuelUpdate triggers re-render */
 
@@ -9101,6 +9131,14 @@ function FuelTab(p){
     /* shift 15% of fat calories into carbs on training days; protein and total unchanged */
     var shiftCal=Math.round(0.15*targets.cal*0.25);
     targets=Object.assign({},targets,{carb:targets.carb+Math.round(shiftCal/4),fat:Math.max(0,targets.fat-Math.round(shiftCal/9))});
+  }
+  /* Cycle-aware fuelling. The context strip always shows; the calorie
+     bump only applies when the user has opted in (see mcFuelContext). */
+  var cycleCtx=mcFuelContext(p.profile);
+  var cycleBump=0;
+  if(cycleCtx&&cycleCtx.calAdj&&cycleFuelOn){
+    cycleBump=mcLutealCalBump(targets.cal);
+    targets=Object.assign({},targets,{cal:targets.cal+cycleBump,carb:targets.carb+Math.round(cycleBump/4)});
   }
 
   useEffect(function(){if(refeedTriggered&&!refeedActive){setShowRefeed(true);}},[]);
@@ -9192,7 +9230,7 @@ function FuelTab(p){
                 return (
                   <div key={m.label}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:5}}>
-                      <span style={{fontSize:T_CAP,color:MU}}>{m.label}{m.label==="Carbs"&&trainedToday&&<span style={{marginLeft:5,fontSize:9,fontWeight:600,background:"#F59E0B1F",color:"#F59E0B",borderRadius:4,padding:"1px 5px"}}>training</span>}</span>
+                      <span style={{fontSize:T_CAP,color:MU}}>{m.label}{m.label==="Carbs"&&trainedToday&&<span style={{marginLeft:5,fontSize:9,fontWeight:600,background:"#F59E0B1F",color:"#F59E0B",borderRadius:4,padding:"1px 5px"}}>training</span>}{m.label==="Carbs"&&cycleBump>0&&<span style={{marginLeft:5,fontSize:9,fontWeight:600,background:MC_COL.luteal+"1F",color:MC_TXT.luteal,borderRadius:4,padding:"1px 5px"}}>luteal +{cycleBump}</span>}</span>
                       {!fs.hideNumbers&&<span className="ds-num" style={{fontSize:T_CAP,fontWeight:600,color:TX}}>{m.val}<span style={{color:MU,fontWeight:400}}> / {m.target}g</span></span>}
                     </div>
                     <div style={{height:6,background:FILL_SOFT,borderRadius:3,overflow:"hidden"}}>
@@ -9204,6 +9242,14 @@ function FuelTab(p){
             </div>
           </div>
         </DsCard>
+        {cycleCtx&&(function(){
+          var nut=sumDayNutrients(day);
+          var goals=nutrientTargets(p.profile,targets.cal);
+          var ironGoal=(goals&&goals.iron&&goals.iron.goal)||18;
+          return <McFuelStrip ctx={cycleCtx} baseCal={targets.cal-cycleBump}
+            iron={{have:Math.round((nut.totals.iron||0)*10)/10,goal:ironGoal,partial:!!nut.missing.iron}}
+            onChange={function(v){setCycleFuelOn(v);}}/>;
+        })()}
         <WaterCard waterMl={waterMl} addWater={addWater} setDay={setDay} fuelProfile={fuelProfile} history={p.history}/>
         <WeightLogCard weightLog={weightLog} useKg={p.useKg} onLog={handleWeightLog} fuelProfile={fuelProfile}/>
         <TdeeReportCard/>
@@ -9483,7 +9529,7 @@ function MealPlanFuelTab(p){
     <div>
       {/* Today's meals from active plan */}
       {todayPlanDay&&(
-        <div style={{background:CARD,borderRadius:14,padding:"14px",border:"1px solid "+BORD,marginBottom:12}}>
+        <div style={{background:ELEV,borderRadius:R_LG,padding:S4,marginBottom:S3}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
             <div>
               <p style={{fontSize:11,fontWeight:700,color:OR,letterSpacing:"0.06em",margin:0}}>TODAY'S PLAN</p>
@@ -9522,7 +9568,7 @@ function MealPlanFuelTab(p){
 
       {/* Full week view */}
       {activePlan&&(
-        <div style={{background:CARD,borderRadius:14,padding:"14px",border:"1px solid "+BORD,marginBottom:12}}>
+        <div style={{background:ELEV,borderRadius:R_LG,padding:S4,marginBottom:S3}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
             <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.06em",margin:0}}>FULL WEEK</p>
             <button onClick={function(){addToShopping(activePlan);}} style={{fontSize:10,color:OR,background:"none",border:"none",fontWeight:700,cursor:"pointer"}}>+ Shopping List ({(activePlan.shoppingList||[]).length})</button>
@@ -9591,7 +9637,7 @@ function MealPlanFuelTab(p){
       )}
 
       {/* Generate / manage plans */}
-      <div style={{background:CARD,borderRadius:14,padding:"14px",border:"1px solid "+BORD,marginBottom:12}}>
+      <div style={{background:ELEV,borderRadius:R_LG,padding:S4,marginBottom:S3}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:showForm?12:0}}>
           <p style={{fontSize:11,fontWeight:700,color:MU,letterSpacing:"0.06em",margin:0}}>{activePlan?"MANAGE PLANS":"GET STARTED"}</p>
           <button onClick={function(){setShowForm(!showForm);}} style={{fontSize:11,color:OR,background:"none",border:"none",fontWeight:700,cursor:"pointer"}}>{showForm?"Cancel":"+ New Plan"}</button>
@@ -11174,7 +11220,7 @@ function RecipesTab(p){
   }
 
   function generateAIMeals(){
-    if(!fp){setAiError("Set up your Fuel Profile first (tap My Profile above).");return;}
+    if(!fp){setAiError("Set up your Fuel Profile first (tap the person icon in the Fuel header).");return;}
     setAiLoading(true);setAiMeals([]);setAiError("");
     var sys="You are a sports nutritionist. Return ONLY a JSON array of 4 meal objects with no extra text or markdown. Each object must have: name, description, cal, pro, carb, fat (all numbers), ingredients (array of strings), steps (array of strings).";
     var usr="Goal: "+goal+". Daily targets: "+fp.tdee+" kcal, "+fp.macroProtein+"g protein, "+fp.macroCarbs+"g carbs, "+fp.macroFat+"g fat. Available food: "+(fp.fridge||"standard groceries")+(fp.allergies?". Avoid: "+fp.allergies:"")+(isVeg?". Vegetarian.":"")+(isTrainingDay?". Training day.":". Rest day.")+". Generate 4 meals (breakfast, lunch, dinner, snack) hitting the targets. Return only the JSON array.";
@@ -13058,16 +13104,14 @@ function ShoppingBudgetTab(p){
   var budgetOver=wkTarget>0&&wkSpent>wkTarget;
 
   return (
-    <div style={{paddingBottom:90,paddingTop:0,paddingLeft:14,paddingRight:14}}>
+    <div style={{paddingBottom:90,paddingTop:0}}>
       {/* Screen Header */}
-      <div style={{paddingTop:52,paddingBottom:16}}>
-        {p.onBack&&(
-          <button onClick={function(){p.onBack();}} style={{display:"flex",alignItems:"center",gap:6,background:"none",border:"none",color:MU,fontSize:13,fontWeight:600,cursor:"pointer",padding:0,marginBottom:10}}>
-            <Ic d={D.back} z={18} c={MU}/> Fuel
-          </button>
-        )}
-        <p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:28,fontWeight:900,color:TX,margin:0,letterSpacing:"-0.01em"}}>SHOP &amp; BUDGET</p>
-        <div style={{display:"flex",gap:8,marginTop:8,alignItems:"center"}}>
+      <DsHeader title="Shop & Budget" size={T_TITLE} top={52} bottom={S3} actions={p.onBack?
+        <button onClick={function(){p.onBack();}} aria-label="Back to Fuel"
+          style={{width:38,height:38,borderRadius:"50%",border:"none",background:FILL_SOFT,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Ic d={D.back} z={18} c={TX}/>
+        </button>:undefined}>
+        <div style={{display:"flex",gap:S2,marginTop:S3,alignItems:"center",flexWrap:"wrap"}}>
           {listCount>0&&(
             <div style={{display:"flex",alignItems:"center",gap:5,background:OR_H+"18",borderRadius:20,padding:"4px 10px",border:"1px solid "+OR_H+"30"}}>
               <span style={{fontSize:12}}>🛒</span>
@@ -13081,25 +13125,22 @@ function ShoppingBudgetTab(p){
             </div>
           )}
           {budgetPct!==null&&(
-            <div style={{display:"flex",alignItems:"center",gap:4,background:SU,borderRadius:20,padding:"4px 10px",border:"1px solid "+BORD}}>
+            <div style={{display:"flex",alignItems:"center",gap:4,background:FILL_SOFT,borderRadius:999,padding:"4px 10px"}}>
               <span style={{fontSize:11,fontWeight:700,color:MU}}>{budgetPct}% used</span>
             </div>
           )}
         </div>
-      </div>
+        <DsSegmented label="Shop section" value={tab} style={{marginTop:S4}}
+          options={tabs.map(function(t){return {id:t[0],label:t[1]};})}
+          onChange={function(v){setTab(v);}}/>
+      </DsHeader>
 
-      {/* Tab Bar */}
-      <div style={{display:"flex",gap:6,marginBottom:16,background:SU,borderRadius:12,padding:4}}>
-        {tabs.map(function(t){
-          var act=tab===t[0];
-          return <button key={t[0]} onClick={function(){setTab(t[0]);}} style={{flex:1,padding:"8px 4px",borderRadius:9,border:"none",background:act?CARD:"transparent",color:act?OR:MU,fontSize:12,fontWeight:700,cursor:"pointer",boxShadow:act?"0 1px 4px rgba(0,0,0,0.15)":"none",transition:"all 0.2s"}}>{t[1]}</button>;
-        })}
+      <div style={{padding:"0 14px"}}>
+        {tab==="shopping"&&<ShoppingTab/>}
+        {tab==="pantry"&&<PantryTab/>}
+        {tab==="stores"&&<MyStoresTab/>}
+        {tab==="budget"&&<BudgetTab/>}
       </div>
-
-      {tab==="shopping"&&<ShoppingTab/>}
-      {tab==="pantry"&&<PantryTab/>}
-      {tab==="stores"&&<MyStoresTab/>}
-      {tab==="budget"&&<BudgetTab/>}
     </div>
   );
 }
@@ -14803,23 +14844,17 @@ function CoachScreen(p){
           <p style={{color:"#fff",fontWeight:700,fontSize:14}}>{savedMsg}</p>
         </div>
       )}
-      <div style={{padding:"52px 20px 14px",background:"rgba(10,10,12,0.78)",borderBottom:"1px solid "+BORD}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
-          <div style={{width:42,height:42,borderRadius:12,background:"linear-gradient(135deg,"+OR_H+",#7C3A0E)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <Ic d={D.ai} z={20} c="#fff"/>
-          </div>
-          <div style={{flex:1}}>
-            <h1 style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:22,fontWeight:800,letterSpacing:"0.03em",color:TX}}>Coach</h1>
-            <p style={{fontSize:12,color:MU}}>{msgs.length>0?"Continuing last conversation":"Ask me anything about your training"}</p>
-          </div>
-          {msgs.length>0&&<button onClick={clearConvo} style={{padding:"6px 12px",borderRadius:8,border:"1px solid "+BORD,background:"transparent",color:MU,fontSize:12,fontWeight:600,cursor:"pointer",flexShrink:0}}>New chat</button>}
-        </div>
-        <div style={{display:"flex",gap:4,background:SURF,borderRadius:12,padding:4}}>
-          {[["chat","Chat"],["plan","Plan"],["check-in","Check-In"],["instructions","Instructions"]].map(function(t){
-            var act=coachTab===t[0];
-            return <button key={t[0]} onClick={function(){setCoachTab(t[0]);}} style={{flex:1,padding:"8px 6px",borderRadius:9,border:"none",background:act?CARD:"transparent",color:act?OR:MU,fontSize:12,fontWeight:act?700:500,cursor:"pointer",transition:"all 0.18s ease"}}>{t[1]}</button>;
-          })}
-        </div>
+      <div style={{background:MATERIAL,backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",borderBottom:"0.5px solid "+SEP}}>
+        <DsHeader title="Coach" size={T_TITLE} bottom={S3}
+          subtitle={msgs.length>0?"Continuing last conversation":"Ask me anything about your training"}
+          actions={msgs.length>0?
+            <button onClick={clearConvo} aria-label="Start a new chat"
+              style={{padding:"7px 13px",borderRadius:999,border:"none",background:FILL_SOFT,color:MU,fontSize:T_CAP,fontWeight:600,cursor:"pointer",flexShrink:0}}>New chat</button>
+            :undefined}>
+          <DsSegmented label="Coach section" value={coachTab} style={{marginTop:S4}}
+            options={[{id:"chat",label:"Chat"},{id:"plan",label:"Plan"},{id:"check-in",label:"Check-In"},{id:"instructions",label:"Notes"}]}
+            onChange={function(v){setCoachTab(v);}}/>
+        </DsHeader>
       </div>
       {coachTab==="instructions"&&(
         <div style={{padding:"16px 20px",paddingBottom:100}}>
@@ -17366,7 +17401,104 @@ function McNutritionCard(p){
         <p style={{fontSize:11,fontWeight:800,color:col,letterSpacing:"0.08em"}}>FUEL</p>
       </div>
       <p style={{fontSize:13.5,color:TX,lineHeight:1.55,paddingRight:16}}>{body}</p>
+      {(function(){
+        if(ph==="menstrual")return <p style={{fontSize:11.5,color:MU,lineHeight:1.45,marginTop:7}}>Fuel is tracking your iron against the 18 mg daily target while you're bleeding.</p>;
+        if(ph==="luteal")return <p style={{fontSize:11.5,color:MU,lineHeight:1.45,marginTop:7}}>{mcFuelAdjustOn()?"Fuel is adding a small calorie allowance this phase.":"You can let Fuel add a small calorie allowance this phase — it's off by default."}</p>;
+        return null;
+      })()}
       <button onClick={function(){p.go("fuel");}} style={{marginTop:10,background:"none",border:"none",color:col,fontSize:12.5,fontWeight:700,cursor:"pointer",padding:0}}>Open Fuel ›</button>
+    </div>
+  );
+}
+
+/* -- FUEL INTEGRATION -------------------------------------------------
+   Connects the cycle to the nutrition engine. Two separate things, kept
+   separate on purpose:
+
+   1. CONTEXT (always on when tracking): the Fuel tab explains what the
+      current phase means for fuelling, and during menstruation it puts
+      iron front and centre — the nutrient panel already tracks iron
+      against an 18 mg female RDA, and menstrual losses are exactly when
+      that number matters.
+   2. TARGET ADJUSTMENT (opt-in, default off): resting metabolic rate
+      runs modestly higher in the luteal phase. Users can let that nudge
+      the daily calorie target, but nothing changes their numbers
+      silently — this app is used by people who count, and a target that
+      moves on its own without consent is not acceptable. */
+function mcFuelAdjustOn(){return ld("mcFuelAdjust",false)===true;}
+function mcFuelContext(profile){
+  if(!isFemaleUser(profile))return null;
+  var mcp=mcGetProfile();
+  if(!mcp||!mcp.setup||mcp.discreet)return null;
+  var days=mcGetDays();
+  var C=mcCompute(mcp,days);
+  if(C.day==null)return null;
+  var ph=C.phaseOfDay(C.day);
+  var out={day:C.day,phase:ph,hbc:C.hbc,recovery:!!C.pregRecovery,
+    name:C.hbc?(ph==="menstrual"?"Bleed":"Tracking"):MC_PHASE_INFO[ph].name,
+    ironFocus:false,calAdj:0,tip:""};
+  if(C.pregRecovery){
+    out.tip="Your cycle is resetting. Eat normally and don't cut hard right now — recovery needs fuel.";
+    out.ironFocus=true;
+    return out;
+  }
+  if(ph==="menstrual"){
+    out.ironFocus=true;
+    out.tip="You lose iron while bleeding. Red meat, lentils, spinach or eggs help top it back up — pair them with vitamin C to absorb more.";
+  } else if(ph==="luteal"){
+    out.tip="Late-cycle appetite often rises, and resting metabolism runs a little higher. Extra hunger here is physiology, not a lapse.";
+    if(mcFuelAdjustOn())out.calAdj=1;   /* resolved against the real target below */
+  } else if(ph==="ovulatory"){
+    out.tip="Appetite often dips around ovulation. Keep fuelling around training — performance still needs carbs.";
+  } else {
+    out.tip="Estrogen is climbing and energy often follows. A good stretch to fuel training properly.";
+  }
+  return out;
+}
+/* Modest, capped: ~5% of the day's target, never more than 150 kcal. */
+function mcLutealCalBump(baseCal){
+  return Math.min(150,Math.round((baseCal||2200)*0.05/10)*10);
+}
+
+function McFuelStrip(p){
+  var ctx=p.ctx;
+  var [on,setOn]=useState(function(){return mcFuelAdjustOn();});
+  if(!ctx)return null;
+  var col=MC_COL[ctx.phase]||MC_COL.neutral;
+  var txt=MC_TXT[ctx.phase]||MC_TXT.neutral;
+  var bump=ctx.phase==="luteal"&&!ctx.hbc&&!ctx.recovery?mcLutealCalBump(p.baseCal):0;
+  return (
+    <div style={{background:CARD,borderRadius:14,border:"1px solid "+BORD,borderLeft:"3px solid "+col,padding:"12px 14px",marginTop:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:6}}>
+        <Ic d={D.drop} z={13} c={txt}/>
+        <p style={{fontSize:10.5,fontWeight:800,color:txt,letterSpacing:"0.08em"}}>
+          {ctx.recovery?"CYCLE RESET":(ctx.name.toUpperCase()+" · DAY "+ctx.day)}
+        </p>
+      </div>
+      <p style={{fontSize:12.5,color:TX,lineHeight:1.5}}>{ctx.tip}</p>
+      {ctx.ironFocus&&p.iron&&(
+        <div style={{marginTop:9}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+            <span style={{fontSize:11,color:MU}}>Iron today</span>
+            <span style={{fontSize:11,fontWeight:700,color:TX}}>{p.iron.have}<span style={{color:MU,fontWeight:400}}>/{p.iron.goal} mg</span></span>
+          </div>
+          <div style={{height:5,background:SU,borderRadius:3,overflow:"hidden"}}>
+            <div style={{height:"100%",width:Math.min(p.iron.have/p.iron.goal,1)*100+"%",background:MC_COL.menstrual,borderRadius:3,transition:"width .3s"}}/>
+          </div>
+          {p.iron.partial&&<p style={{fontSize:10,color:MU,marginTop:3}}>Only counts foods with iron data — some logged items don't carry it.</p>}
+        </div>
+      )}
+      {ctx.phase==="luteal"&&!ctx.hbc&&!ctx.recovery&&(
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginTop:10,paddingTop:9,borderTop:"1px solid "+BORD}}>
+          <div style={{flex:1}}>
+            <p style={{fontSize:12,fontWeight:600,color:TX}}>Add {bump} kcal in this phase</p>
+            <p style={{fontSize:10.5,color:MU,marginTop:1,lineHeight:1.4}}>{on?"Applied to today's target.":"Off — your target stays as calculated."}</p>
+          </div>
+          <button aria-pressed={on} aria-label="Adjust calorie target during the luteal phase" onClick={function(){var n=!on;setOn(n);sd("mcFuelAdjust",n);if(p.onChange)p.onChange(n);}} style={{width:44,height:25,borderRadius:13,border:"none",background:on?col:SU,cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
+            <div style={{width:19,height:19,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:on?22:3,transition:"left .2s"}}/>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -17484,20 +17616,21 @@ function CycleTrackerScreen(p){
 
   return (
     <div style={{paddingBottom:110}}>
-      <div style={{padding:"52px 20px 14px",background:"linear-gradient(180deg,"+phCol+"14 0%,transparent 100%)"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <button onClick={function(){p.go("home");}} style={{background:"none",border:"none",cursor:"pointer",padding:0}}><Ic d={D.back} z={22} c={TX}/></button>
-          <h1 style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:24,fontWeight:800,letterSpacing:"0.05em",color:TX}}>{mcp.discreet?"WELLNESS":"CYCLE"}</h1>
-          <div style={{display:"flex",gap:14,alignItems:"center"}}>
-            <button onClick={function(){setView(view==="cycle"?"calendar":"cycle");}} style={{background:"none",border:"none",cursor:"pointer",padding:0}}><Ic d={view==="cycle"?D.cal:D.time} z={20} c={view==="calendar"?OR:TX}/></button>
-            <button onClick={function(){setShowSettings(true);}} style={{background:"none",border:"none",cursor:"pointer",padding:0}}><Ic d={D.gear} z={20} c={TX}/></button>
-          </div>
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:6,justifyContent:"center"}}>
+      <DsHeader title={mcp.discreet?"Wellness":"Cycle"} size={T_TITLE} tint={phCol} bottom={S3} actions={
+        <>
+          <button onClick={function(){p.go("home");}} aria-label="Back to home"
+            style={{width:36,height:36,borderRadius:"50%",border:"none",background:FILL_SOFT,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Ic d={D.back} z={17} c={TX}/></button>
+          <button onClick={function(){setView(view==="cycle"?"calendar":"cycle");}} aria-label={view==="cycle"?"Show calendar":"Show cycle"}
+            style={{width:36,height:36,borderRadius:"50%",border:"none",background:FILL_SOFT,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Ic d={view==="cycle"?D.cal:D.time} z={17} c={view==="calendar"?OR:TX}/></button>
+          <button onClick={function(){setShowSettings(true);}} aria-label="Cycle settings"
+            style={{width:36,height:36,borderRadius:"50%",border:"none",background:FILL_SOFT,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Ic d={D.gear} z={17} c={TX}/></button>
+        </>
+      }>
+        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:S2}}>
           <Ic d={D.shield} z={11} c={GR}/>
-          <p style={{fontSize:10.5,color:MU,letterSpacing:"0.02em"}}>{cloudOn?"Backed up privately to your account":"Private — data stays on this device"}</p>
+          <p style={{fontSize:T_CAP2,color:MU,margin:0}}>{cloudOn?"Backed up privately to your account":"Private — data stays on this device"}</p>
         </div>
-      </div>
+      </DsHeader>
 
       {view==="calendar"?(
         <McCalendar C={C} days={days} onPickDay={function(iso){setSheetDate(iso);}}/>
@@ -18034,7 +18167,7 @@ function App(){
 
   return (
     <React.Fragment>
-      <style>{CSS}</style>
+      <style>{CSS_ALL}</style>
       {showTutorial&&<TutorialOverlay onDone={function(){sd("tutorialSeen",true);setShowTutorial(false);}}/>}
       {/* Resume Workout Dialog */}
       {showResumeDialog&&workout&&(
