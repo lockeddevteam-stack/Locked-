@@ -140,7 +140,7 @@
     "lk_theme", "lk_homeLayout", "lk_restEnabled", "lk_hidePartials",
     "lk_voiceEnabled", "lk_voiceBtnCorner", "lk_tutorialSeen",
     "lk_refeedAccepted", "lk_refeedDismissed", "lk_fuelSettings",
-    "lk_gamingLayer", "lk_splitsExpanded", "lk_mcFuelAdjust"
+    "lk_gamingLayer", "lk_splitsExpanded"
   ];
   /* ---- Cycle tracking: OPT-IN sync only ----
      lk_mcProfile / lk_mcDays stay device-local unless the user explicitly
@@ -1213,6 +1213,76 @@ html.light-mode {
   --color-shadow: rgba(15,23,42,0.10);
   --color-shadow-light: rgba(15,23,42,0.06);
 }
+
+/* ── Design system v3 ────────────────────────────────────────────────
+   Apple-style composition layer: grouped surfaces, a real type scale and
+   a spacing rhythm. Colours above are unchanged so nothing regresses;
+   these are additive tokens the DS primitives consume. */
+:root {
+  /* grouped-inset surfaces (iOS Settings / Health pattern) */
+  --ds-grouped: #000000;
+  --ds-elevated: #1C1C1E;
+  --ds-elevated-2: #2C2C2E;
+  --ds-separator: rgba(84,84,88,0.34);
+  --ds-fill: rgba(120,120,128,0.20);
+  --ds-fill-soft: rgba(120,120,128,0.12);
+  --ds-material: rgba(30,30,32,0.72);
+
+  /* type scale */
+  --ds-t-large: 34px;   /* large title */
+  --ds-t-title: 26px;
+  --ds-t-head: 20px;
+  --ds-t-body: 16px;
+  --ds-t-sub: 15px;
+  --ds-t-foot: 13px;
+  --ds-t-cap: 12px;
+  --ds-t-cap2: 11px;
+
+  /* spacing rhythm */
+  --ds-s1: 4px;  --ds-s2: 8px;  --ds-s3: 12px;
+  --ds-s4: 16px; --ds-s5: 20px; --ds-s6: 24px; --ds-s8: 32px;
+
+  /* radii */
+  --ds-r-sm: 10px; --ds-r-md: 14px; --ds-r-lg: 18px; --ds-r-xl: 22px;
+}
+html.light-mode {
+  --ds-grouped: #F2F2F7;
+  --ds-elevated: #FFFFFF;
+  --ds-elevated-2: #F2F2F7;
+  --ds-separator: rgba(60,60,67,0.20);
+  --ds-fill: rgba(120,120,128,0.16);
+  --ds-fill-soft: rgba(120,120,128,0.08);
+  --ds-material: rgba(255,255,255,0.78);
+}
+
+/* Numerals line up in columns wherever they're compared */
+.ds-num { font-variant-numeric: tabular-nums; }
+
+/* Grouped list: rows separated by inset hairlines, not boxed individually */
+.ds-list > * + * { border-top: 0.5px solid var(--ds-separator); }
+
+/* Large title that settles as you scroll */
+.ds-largetitle {
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: var(--ds-t-large);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+  color: var(--color-text);
+  margin: 0;
+}
+.ds-section-hd {
+  font-size: var(--ds-t-cap2);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: 0 0 var(--ds-s2);
+  padding-left: var(--ds-s1);
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
 `;
 
 /* Legacy JS vars for compatibility (will be phased out) */
@@ -1224,6 +1294,105 @@ var GR="var(--color-success)",RE="var(--color-error)",BLU="var(--color-info)";
    CSS variables cannot be concatenated with alpha hex digits. */
 var OR_H="#F97316",ORD_H="#7C3A0E",GR_H="#22C55E",RE_H="#EF4444",BLU_H="#3B82F6";
 var SHADOW="var(--color-shadow)";
+
+/* ── Design system v3 primitives ──────────────────────────────────────
+   One vocabulary for composition so screens stop hand-rolling spacing.
+   All purely presentational — they wrap children, never own state. */
+var GROUPED="var(--ds-grouped)",ELEV="var(--ds-elevated)",ELEV2="var(--ds-elevated-2)";
+var SEP="var(--ds-separator)",FILL="var(--ds-fill)",FILL_SOFT="var(--ds-fill-soft)",MATERIAL="var(--ds-material)";
+var S1=4,S2=8,S3=12,S4=16,S5=20,S6=24,S8=32;
+var R_SM=10,R_MD=14,R_LG=18,R_XL=22;
+var T_LARGE=34,T_TITLE=26,T_HEAD=20,T_BODY=16,T_SUB=15,T_FOOT=13,T_CAP=12,T_CAP2=11;
+var FONT_D="Barlow Condensed,sans-serif";
+
+/* Screen header: large title, optional subtitle, optional trailing actions */
+function DsHeader(p){
+  return (
+    <div style={{padding:(p.top!==undefined?p.top:52)+"px "+S5+"px "+(p.bottom!==undefined?p.bottom:S4)+"px",background:p.tint?"linear-gradient(180deg,"+p.tint+"14 0%,transparent 100%)":"transparent"}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:S3}}>
+        <div style={{minWidth:0,flex:1}}>
+          {p.eyebrow&&<p style={{fontSize:T_CAP2,fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase",color:MU,margin:"0 0 2px"}}>{p.eyebrow}</p>}
+          <h1 className="ds-largetitle" style={{fontSize:p.size||T_LARGE}}>{p.title}</h1>
+          {p.subtitle&&<p style={{fontSize:T_FOOT,color:MU,margin:"4px 0 0",lineHeight:1.4}}>{p.subtitle}</p>}
+        </div>
+        {p.actions&&<div style={{display:"flex",gap:S2,flexShrink:0,paddingTop:2}}>{p.actions}</div>}
+      </div>
+      {p.children}
+    </div>
+  );
+}
+
+/* Titled section wrapper — the grouped-list pattern */
+function DsSection(p){
+  return (
+    <div style={{marginBottom:p.gap!==undefined?p.gap:S5}}>
+      {p.title&&(
+        <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:S2}}>
+          <p className="ds-section-hd">{p.title}</p>
+          {p.action}
+        </div>
+      )}
+      {p.children}
+      {p.footnote&&<p style={{fontSize:T_CAP2,color:MU,margin:S2+"px 0 0",paddingLeft:S1,lineHeight:1.45}}>{p.footnote}</p>}
+    </div>
+  );
+}
+
+/* Elevated card. inset=true gives the iOS grouped-inset look. */
+function DsCard(p){
+  var st={background:p.tone==="soft"?FILL_SOFT:ELEV,borderRadius:p.radius||R_LG,
+    padding:p.pad!==undefined?p.pad:S4,overflow:"hidden"};
+  if(p.accent) st.border="1px solid "+p.accent;
+  if(p.onClick) st.cursor="pointer";
+  return <div onClick={p.onClick} style={Object.assign(st,p.style||{})}>{p.children}</div>;
+}
+
+/* A row inside a grouped list: label left, value/control right */
+function DsRow(p){
+  return (
+    <div onClick={p.onClick} style={Object.assign({display:"flex",alignItems:"center",gap:S3,
+      padding:(p.dense?S2+"px ":S3+"px ")+S4+"px",minHeight:p.dense?38:48,cursor:p.onClick?"pointer":"default"},p.style||{})}>
+      {p.leading}
+      <div style={{flex:1,minWidth:0}}>
+        <p style={{fontSize:T_SUB,color:TX,margin:0,fontWeight:p.strong?600:400,overflow:"hidden",textOverflow:"ellipsis"}}>{p.label}</p>
+        {p.detail&&<p style={{fontSize:T_CAP,color:MU,margin:"1px 0 0"}}>{p.detail}</p>}
+      </div>
+      {p.value&&<span className="ds-num" style={{fontSize:T_SUB,color:p.valueColor||MU,flexShrink:0}}>{p.value}</span>}
+      {p.trailing}
+    </div>
+  );
+}
+
+/* iOS-style segmented control */
+function DsSegmented(p){
+  return (
+    <div role="tablist" aria-label={p.label||"View"} style={Object.assign({display:"flex",gap:2,background:FILL_SOFT,borderRadius:R_SM,padding:2},p.style||{})}>
+      {(p.options||[]).map(function(o){
+        var on=p.value===o.id;
+        return (
+          <button key={o.id} role="tab" aria-selected={on} onClick={function(){p.onChange(o.id);}}
+            style={{flex:1,padding:"7px 10px",borderRadius:R_SM-3,border:"none",cursor:"pointer",
+              background:on?ELEV:"transparent",color:on?TX:MU,fontSize:T_FOOT,
+              fontWeight:on?600:500,transition:"background .18s ease,color .18s ease",whiteSpace:"nowrap",
+              boxShadow:on?"0 1px 3px "+SHADOW:"none"}}>{o.label}</button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* Hero metric — one number that dominates, everything else demoted */
+function DsStat(p){
+  return (
+    <div style={Object.assign({minWidth:0},p.style||{})}>
+      <p style={{fontSize:T_CAP2,fontWeight:600,letterSpacing:"0.05em",textTransform:"uppercase",color:MU,margin:0}}>{p.label}</p>
+      <p className="ds-num" style={{fontFamily:FONT_D,fontSize:p.size||T_TITLE,fontWeight:800,color:p.color||TX,margin:"1px 0 0",lineHeight:1.05}}>
+        {p.value}{p.unit&&<span style={{fontSize:T_FOOT,fontWeight:600,color:MU,marginLeft:3}}>{p.unit}</span>}
+      </p>
+      {p.detail&&<p style={{fontSize:T_CAP2,color:MU,margin:"2px 0 0"}}>{p.detail}</p>}
+    </div>
+  );
+}
 
 var CSS=[
   "@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');",
@@ -5752,16 +5921,16 @@ function HomeScreen(p){
 
   return (
     <div style={{paddingBottom:80}}>
-      <div style={{padding:"52px 20px 18px",background:"linear-gradient(180deg,"+OR_H+"18 0%,transparent 100%)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-          <div>
-            <p style={{color:MU,fontSize:13}}>{(function(){var h=today.getHours();return h<5?"Up late,":h<12?"Good morning,":h<17?"Good afternoon,":"Good evening,";})()}</p>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <h1 style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:38,fontWeight:800,letterSpacing:"0.04em",lineHeight:1,color:TX}}>{profile.displayName||"Athlete"}</h1>
-              {streak>0&&ld("gamingLayer",true)!==false&&<div style={{display:"flex",alignItems:"center",gap:4,background:OR_H+"18",borderRadius:10,padding:"4px 9px",border:"1px solid "+OR_H+"40"}}><Ic d={D.fire} z={14} c={OR} f={OR}/><span style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:16,fontWeight:800,color:OR}}>{streak}</span></div>}
+      <div style={{padding:"52px 20px 20px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:S3}}>
+          <div style={{minWidth:0}}>
+            <p style={{color:MU,fontSize:T_CAP2,fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase",margin:"0 0 2px"}}>{(function(){var h=today.getHours();return h<5?"Up late":h<12?"Good morning":h<17?"Good afternoon":"Good evening";})()}</p>
+            <div style={{display:"flex",alignItems:"center",gap:S2,flexWrap:"wrap"}}>
+              <h1 className="ds-largetitle" style={{fontSize:T_LARGE}}>{profile.displayName||"Athlete"}</h1>
+              {streak>0&&ld("gamingLayer",true)!==false&&<div style={{display:"flex",alignItems:"center",gap:3,background:OR_H+"1A",borderRadius:999,padding:"3px 9px"}}><Ic d={D.fire} z={12} c={OR} f={OR}/><span className="ds-num" style={{fontFamily:FONT_D,fontSize:T_SUB,fontWeight:800,color:OR}}>{streak}</span></div>}
             </div>
           </div>
-          <div style={{width:44,height:44,borderRadius:"50%",background:"linear-gradient(135deg,"+OR_H+","+ORD_H+")",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Barlow Condensed,sans-serif",fontSize:20,fontWeight:800,color:"#fff"}}>
+          <div aria-hidden="true" style={{width:42,height:42,borderRadius:"50%",flexShrink:0,background:"linear-gradient(135deg,"+OR_H+","+ORD_H+")",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:FONT_D,fontSize:T_HEAD,fontWeight:800,color:"#fff"}}>
             {(profile.displayName||"A")[0].toUpperCase()}
           </div>
         </div>
@@ -5770,9 +5939,13 @@ function HomeScreen(p){
         var layout=getHomeLayout();
         var BLOCKS={
           stats:function(){return (
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,padding:"0 20px"}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:S3,padding:"0 20px"}}>
               {[{label:"Total Workouts",value:history.length},{label:"My Splits",value:p.splits.length},{label:"This Week",value:uDays},{label:"PRs Logged",value:Object.keys(prs).length}].map(function(item,i){
-                return <div key={i} style={{background:CARD,borderRadius:13,padding:"14px 15px",border:"1px solid "+BORD,animation:"fadeUp .4s "+(i*0.06)+"s ease both"}}><p style={{fontSize:12,color:MU,marginBottom:5,fontWeight:700,letterSpacing:"0.07em"}}>{item.label.toUpperCase()}</p><p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:30,fontWeight:800,lineHeight:1,color:item.value>0?TX:MU}}>{item.value}</p></div>;
+                return (
+                  <DsCard key={i} radius={R_MD} pad={S4} style={{animation:"fadeUp .4s "+(i*0.06)+"s ease both"}}>
+                    <DsStat label={item.label} value={item.value} size={30} color={item.value>0?TX:MU}/>
+                  </DsCard>
+                );
               })}
             </div>
           );},
@@ -8892,7 +9065,6 @@ function FuelTab(p){
   var [fuelProfile,setFuelProfileRaw]=useState(function(){return ld("fuelProfile",null);});
   var [weightLog,setWeightLog]=useState(function(){return getWeightLog();});
   var [showRefeed,setShowRefeed]=useState(false);
-  var [cycleFuelOn,setCycleFuelOn]=useState(function(){return mcFuelAdjustOn();});
   var [refeedActive,setRefeedActive]=useState(function(){return ld("refeedAccepted",null)===new Date().toISOString().slice(0,10);});
   var fs=getFuelSettings(); /* re-read each render; lockedFuelUpdate triggers re-render */
 
@@ -8929,14 +9101,6 @@ function FuelTab(p){
     /* shift 15% of fat calories into carbs on training days; protein and total unchanged */
     var shiftCal=Math.round(0.15*targets.cal*0.25);
     targets=Object.assign({},targets,{carb:targets.carb+Math.round(shiftCal/4),fat:Math.max(0,targets.fat-Math.round(shiftCal/9))});
-  }
-  /* Cycle-aware fuelling. The context strip always shows; the calorie
-     bump only applies when the user has opted in (see mcFuelContext). */
-  var cycleCtx=mcFuelContext(p.profile);
-  var cycleBump=0;
-  if(cycleCtx&&cycleCtx.calAdj&&cycleFuelOn){
-    cycleBump=mcLutealCalBump(targets.cal);
-    targets=Object.assign({},targets,{cal:targets.cal+cycleBump,carb:targets.carb+Math.round(cycleBump/4)});
   }
 
   useEffect(function(){if(refeedTriggered&&!refeedActive){setShowRefeed(true);}},[]);
@@ -8990,62 +9154,56 @@ function FuelTab(p){
 
   return (
     <div style={{paddingBottom:80}}>
-      <div style={{padding:"52px 20px 16px",background:"linear-gradient(180deg,"+OR_H+"18 0%,transparent 100%)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-          <h1 style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:32,fontWeight:800,letterSpacing:"0.04em",color:TX}}>FUEL</h1>
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={function(){setView("shop");}} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 13px",borderRadius:9,border:"1px solid "+OR_H+"40",background:OR_H+"12",color:OR,fontSize:12,fontWeight:700,cursor:"pointer"}}>
-              <Ic d={D.shopping} z={13} c={OR}/> Shop
+      <div style={{padding:"52px 20px 16px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:S5}}>
+          <div style={{minWidth:0}}>
+            <p style={{fontSize:T_CAP2,fontWeight:600,letterSpacing:"0.08em",textTransform:"uppercase",color:MU,margin:"0 0 2px"}}>{(function(){var h=new Date().getHours();return h<12?"Good morning":h<18?"Good afternoon":"Good evening";})()}</p>
+            <h1 className="ds-largetitle">Fuel</h1>
+          </div>
+          <div style={{display:"flex",gap:S2,flexShrink:0}}>
+            <button onClick={function(){setView("shop");}} aria-label="Shopping and budget" style={{width:36,height:36,borderRadius:"50%",border:"none",background:FILL_SOFT,color:OR,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Ic d={D.shopping} z={16} c={OR}/>
             </button>
-            <button onClick={function(){setView("profile");}} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 13px",borderRadius:9,border:"1px solid "+BORD,background:"transparent",color:MU,fontSize:12,cursor:"pointer"}}>
-              <Ic d={D.edit} z={13} c={MU}/> My Profile
+            <button onClick={function(){setView("profile");}} aria-label="Fuel profile and targets" style={{width:36,height:36,borderRadius:"50%",border:"none",background:FILL_SOFT,color:MU,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Ic d={D.edit} z={16} c={MU}/>
             </button>
           </div>
         </div>
-        <div style={{background:CARD,borderRadius:16,padding:"16px",border:"1px solid "+BORD,display:"flex",alignItems:"center",gap:16}}>
-          <div style={{position:"relative",flexShrink:0}}>
-            <MacroRing pct={totalCal/targets.cal} color={OR} size={90} stroke={9}/>
-            <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",textAlign:"center"}}>
-              {fs.hideNumbers?(
-                <p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:13,fontWeight:800,color:totalCal>targets.cal?"#F59E0B":TX,lineHeight:1.15,textTransform:"uppercase"}}>{totalCal>targets.cal?"Over":"On track"}</p>
-              ):fs.framing==="consumed"?(
-                <div>
-                  <p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:16,fontWeight:900,color:TX,lineHeight:1}}>{totalCal}<span style={{fontSize:12,fontWeight:400,color:MU}}>/{targets.cal}</span></p>
-                  <p style={{fontSize:10,color:MU}}>kcal eaten</p>
-                </div>
-              ):(
-                <div>
-                  <p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:16,fontWeight:900,color:totalCal>targets.cal?"#F59E0B":TX,lineHeight:1}}>{totalCal>targets.cal?totalCal-targets.cal:targets.cal-totalCal}</p>
-                  <p style={{fontSize:10,color:MU}}>{totalCal>targets.cal?"kcal over":"kcal left"}</p>
-                </div>
-              )}
+        {/* Hero: one number dominates, macros demoted to a supporting row */}
+        <DsCard radius={R_XL} pad={S5}>
+          <div style={{display:"flex",alignItems:"center",gap:S5}}>
+            <div style={{position:"relative",flexShrink:0}}>
+              <MacroRing pct={totalCal/targets.cal} color={totalCal>targets.cal?"#F59E0B":OR} size={112} stroke={10}/>
+              <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",textAlign:"center",width:96}}>
+                {fs.hideNumbers?(
+                  <p style={{fontFamily:FONT_D,fontSize:T_HEAD,fontWeight:800,color:totalCal>targets.cal?"#F59E0B":TX,lineHeight:1.05,margin:0}}>{totalCal>targets.cal?"Over":"On track"}</p>
+                ):(
+                  <div>
+                    <p className="ds-num" style={{fontFamily:FONT_D,fontSize:38,fontWeight:800,color:totalCal>targets.cal?"#F59E0B":TX,lineHeight:1,margin:0,letterSpacing:"-0.01em"}}>
+                      {fs.framing==="consumed"?totalCal:(totalCal>targets.cal?totalCal-targets.cal:targets.cal-totalCal)}
+                    </p>
+                    <p style={{fontSize:T_CAP2,color:MU,margin:"2px 0 0"}}>{fs.framing==="consumed"?"kcal eaten":(totalCal>targets.cal?"kcal over":"kcal left")}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:S3}}>
+              {[{label:"Protein",val:totalPro,target:targets.pro,col:"#3B82F6"},{label:"Carbs",val:totalCarb,target:targets.carb,col:"#F59E0B"},{label:"Fat",val:totalFat,target:targets.fat,col:"#EC4899"}].map(function(m){
+                return (
+                  <div key={m.label}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:5}}>
+                      <span style={{fontSize:T_CAP,color:MU}}>{m.label}{m.label==="Carbs"&&trainedToday&&<span style={{marginLeft:5,fontSize:9,fontWeight:600,background:"#F59E0B1F",color:"#F59E0B",borderRadius:4,padding:"1px 5px"}}>training</span>}</span>
+                      {!fs.hideNumbers&&<span className="ds-num" style={{fontSize:T_CAP,fontWeight:600,color:TX}}>{m.val}<span style={{color:MU,fontWeight:400}}> / {m.target}g</span></span>}
+                    </div>
+                    <div style={{height:6,background:FILL_SOFT,borderRadius:3,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:Math.min(m.val/m.target,1)*100+"%",background:m.col,borderRadius:3,transition:"width .35s ease"}}/>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
-          <div style={{flex:1,display:"flex",flexDirection:"column",gap:8}}>
-            {[{label:"Protein",val:totalPro,target:targets.pro,col:"#3B82F6"},{label:"Carbs",val:totalCarb,target:targets.carb,col:"#F59E0B"},{label:"Fat",val:totalFat,target:targets.fat,col:"#EC4899"}].map(function(m){
-              return (
-                <div key={m.label}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                    <span style={{fontSize:11,color:MU}}>{m.label}{m.label==="Carbs"&&trainedToday&&<span style={{marginLeft:5,fontSize:9,fontWeight:700,background:"#F59E0B22",color:"#F59E0B",borderRadius:3,padding:"1px 5px"}}>training day</span>}{m.label==="Carbs"&&cycleBump>0&&<span style={{marginLeft:5,fontSize:9,fontWeight:700,background:MC_COL.luteal+"22",color:MC_TXT.luteal,borderRadius:3,padding:"1px 5px"}}>luteal +{cycleBump}</span>}</span>
-                    {!fs.hideNumbers&&<span style={{fontSize:11,fontWeight:700,color:TX}}>{m.val}<span style={{color:MU,fontWeight:400}}>/{m.target}g</span></span>}
-                  </div>
-                  <div style={{height:5,background:SU,borderRadius:3,overflow:"hidden"}}>
-                    <div style={{height:"100%",width:Math.min(m.val/m.target,1)*100+"%",background:m.col,borderRadius:3,transition:"width .3s"}}/>
-                  </div>
-                  {!fs.hideNumbers&&fs.framing!=="consumed"&&m.val<m.target&&<p style={{fontSize:9,color:MU,textAlign:"right",marginTop:2}}>{Math.round(m.target-m.val)}g left</p>}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        {cycleCtx&&(function(){
-          var nut=sumDayNutrients(day);
-          var goals=nutrientTargets(p.profile,targets.cal);
-          var ironGoal=(goals&&goals.iron&&goals.iron.goal)||18;
-          return <McFuelStrip ctx={cycleCtx} baseCal={targets.cal-cycleBump}
-            iron={{have:Math.round((nut.totals.iron||0)*10)/10,goal:ironGoal,partial:!!nut.missing.iron}}
-            onChange={function(v){setCycleFuelOn(v);}}/>;
-        })()}
+        </DsCard>
         <WaterCard waterMl={waterMl} addWater={addWater} setDay={setDay} fuelProfile={fuelProfile} history={p.history}/>
         <WeightLogCard weightLog={weightLog} useKg={p.useKg} onLog={handleWeightLog} fuelProfile={fuelProfile}/>
         <TdeeReportCard/>
@@ -9062,20 +9220,19 @@ function FuelTab(p){
           var logTabs=[["list","List"],["search","Search"],["scan","Scan"],["photo","Photo"],["trends","Trends"],["supps","Supps"]];
           if(ld("perfTracking",false))logTabs.push(["cycle","Cycle"]);
           return (
-            <div style={{marginTop:12}}>
-              <div style={{display:"flex",gap:4,background:SURF,borderRadius:13,padding:4,marginBottom:8}}>
-                <button onClick={function(){if(outerMeals)setTab("list");}} style={{flex:1,padding:"10px",borderRadius:10,border:"none",background:!outerMeals?"linear-gradient(135deg,"+OR_H+",#EA580C)":"transparent",color:!outerMeals?"#fff":MU,fontSize:14,fontWeight:700,cursor:"pointer",transition:"all 0.18s ease"}}>Log</button>
-                <button onClick={function(){if(!outerMeals)setTab("plan");}} style={{flex:1,padding:"10px",borderRadius:10,border:"none",background:outerMeals?"linear-gradient(135deg,"+OR_H+",#EA580C)":"transparent",color:outerMeals?"#fff":MU,fontSize:14,fontWeight:700,cursor:"pointer",transition:"all 0.18s ease"}}>Meals</button>
-              </div>
+            <div style={{marginTop:S5}}>
+              <DsSegmented label="Fuel section" value={outerMeals?"meals":"log"} style={{marginBottom:S3}}
+                options={[{id:"log",label:"Log"},{id:"meals",label:"Meals"}]}
+                onChange={function(v){setTab(v==="meals"?"plan":"list");}}/>
               {!outerMeals&&(
-                <div style={{display:"flex",gap:6,overflowX:"auto"}}>
-                  {logTabs.map(function(t){var act=tab===t[0];return <button key={t[0]} onClick={function(){setTab(t[0]);}} style={{padding:"6px 14px",borderRadius:20,border:"1px solid "+(act?OR:BORD),background:act?OR_H+"18":"transparent",color:act?OR:MU,fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{t[1]}</button>;})}
+                <div style={{display:"flex",gap:S2,overflowX:"auto",paddingBottom:2}}>
+                  {logTabs.map(function(t){var act=tab===t[0];return <button key={t[0]} onClick={function(){setTab(t[0]);}} aria-current={act?"page":undefined} style={{padding:"7px 14px",borderRadius:999,border:"none",background:act?OR:FILL_SOFT,color:act?"#fff":MU,fontSize:T_FOOT,fontWeight:act?600:500,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,transition:"background .18s ease"}}>{t[1]}</button>;})}
                 </div>
               )}
               {outerMeals&&(
-                <div style={{display:"flex",gap:6}}>
-                  {[["plan","Meal Plans"],["recipes","Recipes"]].map(function(t){var act=tab===t[0];return <button key={t[0]} onClick={function(){setTab(t[0]);}} style={{flex:1,padding:"8px",borderRadius:20,border:"1px solid "+(act?OR:BORD),background:act?OR_H+"18":"transparent",color:act?OR:MU,fontSize:13,fontWeight:700,cursor:"pointer"}}>{t[1]}</button>;})}
-                </div>
+                <DsSegmented label="Meals section" value={tab}
+                  options={[{id:"plan",label:"Meal Plans"},{id:"recipes",label:"Recipes"}]}
+                  onChange={function(v){setTab(v);}}/>
               )}
             </div>
           );
@@ -17209,104 +17366,7 @@ function McNutritionCard(p){
         <p style={{fontSize:11,fontWeight:800,color:col,letterSpacing:"0.08em"}}>FUEL</p>
       </div>
       <p style={{fontSize:13.5,color:TX,lineHeight:1.55,paddingRight:16}}>{body}</p>
-      {(function(){
-        if(ph==="menstrual")return <p style={{fontSize:11.5,color:MU,lineHeight:1.45,marginTop:7}}>Fuel is tracking your iron against the 18 mg daily target while you're bleeding.</p>;
-        if(ph==="luteal")return <p style={{fontSize:11.5,color:MU,lineHeight:1.45,marginTop:7}}>{mcFuelAdjustOn()?"Fuel is adding a small calorie allowance this phase.":"You can let Fuel add a small calorie allowance this phase — it's off by default."}</p>;
-        return null;
-      })()}
       <button onClick={function(){p.go("fuel");}} style={{marginTop:10,background:"none",border:"none",color:col,fontSize:12.5,fontWeight:700,cursor:"pointer",padding:0}}>Open Fuel ›</button>
-    </div>
-  );
-}
-
-/* -- FUEL INTEGRATION -------------------------------------------------
-   Connects the cycle to the nutrition engine. Two separate things, kept
-   separate on purpose:
-
-   1. CONTEXT (always on when tracking): the Fuel tab explains what the
-      current phase means for fuelling, and during menstruation it puts
-      iron front and centre — the nutrient panel already tracks iron
-      against an 18 mg female RDA, and menstrual losses are exactly when
-      that number matters.
-   2. TARGET ADJUSTMENT (opt-in, default off): resting metabolic rate
-      runs modestly higher in the luteal phase. Users can let that nudge
-      the daily calorie target, but nothing changes their numbers
-      silently — this app is used by people who count, and a target that
-      moves on its own without consent is not acceptable. */
-function mcFuelAdjustOn(){return ld("mcFuelAdjust",false)===true;}
-function mcFuelContext(profile){
-  if(!isFemaleUser(profile))return null;
-  var mcp=mcGetProfile();
-  if(!mcp||!mcp.setup||mcp.discreet)return null;
-  var days=mcGetDays();
-  var C=mcCompute(mcp,days);
-  if(C.day==null)return null;
-  var ph=C.phaseOfDay(C.day);
-  var out={day:C.day,phase:ph,hbc:C.hbc,recovery:!!C.pregRecovery,
-    name:C.hbc?(ph==="menstrual"?"Bleed":"Tracking"):MC_PHASE_INFO[ph].name,
-    ironFocus:false,calAdj:0,tip:""};
-  if(C.pregRecovery){
-    out.tip="Your cycle is resetting. Eat normally and don't cut hard right now — recovery needs fuel.";
-    out.ironFocus=true;
-    return out;
-  }
-  if(ph==="menstrual"){
-    out.ironFocus=true;
-    out.tip="You lose iron while bleeding. Red meat, lentils, spinach or eggs help top it back up — pair them with vitamin C to absorb more.";
-  } else if(ph==="luteal"){
-    out.tip="Late-cycle appetite often rises, and resting metabolism runs a little higher. Extra hunger here is physiology, not a lapse.";
-    if(mcFuelAdjustOn())out.calAdj=1;   /* resolved against the real target below */
-  } else if(ph==="ovulatory"){
-    out.tip="Appetite often dips around ovulation. Keep fuelling around training — performance still needs carbs.";
-  } else {
-    out.tip="Estrogen is climbing and energy often follows. A good stretch to fuel training properly.";
-  }
-  return out;
-}
-/* Modest, capped: ~5% of the day's target, never more than 150 kcal. */
-function mcLutealCalBump(baseCal){
-  return Math.min(150,Math.round((baseCal||2200)*0.05/10)*10);
-}
-
-function McFuelStrip(p){
-  var ctx=p.ctx;
-  var [on,setOn]=useState(function(){return mcFuelAdjustOn();});
-  if(!ctx)return null;
-  var col=MC_COL[ctx.phase]||MC_COL.neutral;
-  var txt=MC_TXT[ctx.phase]||MC_TXT.neutral;
-  var bump=ctx.phase==="luteal"&&!ctx.hbc&&!ctx.recovery?mcLutealCalBump(p.baseCal):0;
-  return (
-    <div style={{background:CARD,borderRadius:14,border:"1px solid "+BORD,borderLeft:"3px solid "+col,padding:"12px 14px",marginTop:10}}>
-      <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:6}}>
-        <Ic d={D.drop} z={13} c={txt}/>
-        <p style={{fontSize:10.5,fontWeight:800,color:txt,letterSpacing:"0.08em"}}>
-          {ctx.recovery?"CYCLE RESET":(ctx.name.toUpperCase()+" · DAY "+ctx.day)}
-        </p>
-      </div>
-      <p style={{fontSize:12.5,color:TX,lineHeight:1.5}}>{ctx.tip}</p>
-      {ctx.ironFocus&&p.iron&&(
-        <div style={{marginTop:9}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-            <span style={{fontSize:11,color:MU}}>Iron today</span>
-            <span style={{fontSize:11,fontWeight:700,color:TX}}>{p.iron.have}<span style={{color:MU,fontWeight:400}}>/{p.iron.goal} mg</span></span>
-          </div>
-          <div style={{height:5,background:SU,borderRadius:3,overflow:"hidden"}}>
-            <div style={{height:"100%",width:Math.min(p.iron.have/p.iron.goal,1)*100+"%",background:MC_COL.menstrual,borderRadius:3,transition:"width .3s"}}/>
-          </div>
-          {p.iron.partial&&<p style={{fontSize:10,color:MU,marginTop:3}}>Only counts foods with iron data — some logged items don't carry it.</p>}
-        </div>
-      )}
-      {ctx.phase==="luteal"&&!ctx.hbc&&!ctx.recovery&&(
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginTop:10,paddingTop:9,borderTop:"1px solid "+BORD}}>
-          <div style={{flex:1}}>
-            <p style={{fontSize:12,fontWeight:600,color:TX}}>Add {bump} kcal in this phase</p>
-            <p style={{fontSize:10.5,color:MU,marginTop:1,lineHeight:1.4}}>{on?"Applied to today's target.":"Off — your target stays as calculated."}</p>
-          </div>
-          <button aria-pressed={on} aria-label="Adjust calorie target during the luteal phase" onClick={function(){var n=!on;setOn(n);sd("mcFuelAdjust",n);if(p.onChange)p.onChange(n);}} style={{width:44,height:25,borderRadius:13,border:"none",background:on?col:SU,cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
-            <div style={{width:19,height:19,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:on?22:3,transition:"left .2s"}}/>
-          </button>
-        </div>
-      )}
     </div>
   );
 }
