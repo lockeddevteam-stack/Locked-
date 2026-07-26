@@ -4036,6 +4036,37 @@ function WorkoutLog(p){
     pushRest(secs,exName);
   }
 
+  /* Changing the duration mid-rest re-targets the rest you're already taking
+     instead of restarting it: 20 s into a 1:30, switching to 3:00 leaves 2:40,
+     not a fresh 3:00. Time already rested is time rested. Dismissing the timer
+     and starting a new one still begins from scratch at the last duration. */
+  function retargetRest(secs){
+    sd("activeWorkoutRestTarget",secs);
+    setRestTarget(secs);
+    var elapsed=restStartRef.current?Math.floor((Date.now()-restStartRef.current)/1000):0;
+    var remaining=secs-elapsed;
+    if(remaining<=0){
+      /* Shortened past what's already elapsed — the rest is simply over. */
+      if(restRef.current){clearInterval(restRef.current);restRef.current=null;}
+      restStartRef.current=null;
+      setRestSec(0);
+      setRestActive(false);
+      cancelPushRest();
+      return;
+    }
+    setRestSec(remaining);
+    pushRest(remaining);
+  }
+
+  /* Every duration control behaves the same way: while a rest is running it
+     re-targets that rest, otherwise it just sets the length of the next one. */
+  function pickRest(secs){
+    if(restActive){retargetRest(secs);return;}
+    sd("activeWorkoutRestTarget",secs);
+    setRestTarget(secs);
+    setRestSec(secs);
+  }
+
   /* Recalculate rest timer when app returns from background */
   useEffect(function(){
     function onVisible(){
@@ -4318,7 +4349,7 @@ function WorkoutLog(p){
                 <p style={{fontSize:11,color:MU,fontWeight:600,letterSpacing:"0.06em",marginBottom:10}}>DURATION</p>
                 <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                   {[30,60,90,120,180,300].map(function(s){return(
-                    <button key={s} onClick={function(){setRestTarget(s);sd("activeWorkoutRestTarget",s);}} style={{flex:"1 1 calc(33% - 8px)",padding:"10px 6px",borderRadius:10,border:"1px solid "+(restTarget===s?OR:BORD),background:restTarget===s?OR_H+"18":"transparent",color:restTarget===s?OR:TX,fontSize:14,fontWeight:700,cursor:"pointer",textAlign:"center"}}>
+                    <button key={s} onClick={function(){pickRest(s);}} style={{flex:"1 1 calc(33% - 8px)",padding:"10px 6px",borderRadius:10,border:"1px solid "+(restTarget===s?OR:BORD),background:restTarget===s?OR_H+"18":"transparent",color:restTarget===s?OR:TX,fontSize:14,fontWeight:700,cursor:"pointer",textAlign:"center"}}>
                       {s<60?s+"s":Math.floor(s/60)+(s%60>0?":"+String(s%60).padStart(2,"0"):"")+"m"}
                     </button>
                   );})}
@@ -4373,13 +4404,13 @@ function WorkoutLog(p){
                   </div>
                   <button onClick={function(){
                     var total=(parseInt(restCustomMins)||0)*60+(parseInt(restCustomSecs)||0);
-                    if(total>0){startRest(total);setRestCustom(false);setRestCustomMins("");setRestCustomSecs("");}
+                    if(total>0){pickRest(total);setRestCustom(false);setRestCustomMins("");setRestCustomSecs("");}
                   }} style={{padding:"5px 10px",borderRadius:6,border:"none",background:OR,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>Set</button>
                   <button onClick={function(){setRestCustom(false);setRestCustomMins("");setRestCustomSecs("");}} style={{padding:"5px 6px",borderRadius:6,border:"1px solid "+BORD,background:"transparent",color:MU,fontSize:11,cursor:"pointer"}}>Cancel</button>
                 </div>
               ):(
                 <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                  {[60,90,120,180].map(function(s){return <button key={s} onClick={function(){startRest(s);}} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+(restTarget===s?OR:BORD),background:restTarget===s?OR_H+"18":"transparent",color:restTarget===s?OR:MU,fontSize:11,fontWeight:600,cursor:"pointer"}}>{s<60?s+"s":Math.floor(s/60)+(s%60?"m"+s%60:"m")}</button>;})}
+                  {[60,90,120,180].map(function(s){return <button key={s} onClick={function(){pickRest(s);}} style={{padding:"4px 8px",borderRadius:6,border:"1px solid "+(restTarget===s?OR:BORD),background:restTarget===s?OR_H+"18":"transparent",color:restTarget===s?OR:MU,fontSize:11,fontWeight:600,cursor:"pointer"}}>{s<60?s+"s":Math.floor(s/60)+(s%60?"m"+s%60:"m")}</button>;})}
                   <button onClick={function(){
                     var m=Math.floor(restTarget/60);
                     var s=restTarget%60;
