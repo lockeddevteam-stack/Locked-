@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api",
+      "destination": "https://lockedapi.cescocugliari.workers.dev/"
+    },
+    {
+      "source": "/api/",
+      "destination": "https://lockedapi.cescocugliari.workers.dev/"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://lockedapi.cescocugliari.workers.dev/:path*"
     }

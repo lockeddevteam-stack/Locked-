@@ -2274,7 +2274,7 @@ function authHeaders(extra) {
 // -- AI HELPER ---------------------------------------------------------------
 function aiCall(sys, userMsg, onLoad, onDone, onFail, signal) {
   if(onLoad) onLoad(true);
-  fetch("/api/", {
+  fetch("/api", {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({
@@ -5069,7 +5069,7 @@ function AISplitBuilder(p){
   }
 
   function callWorker(sys, messages, onDone, onErr){
-    fetch("/api/",{
+    fetch("/api",{
       method:"POST", headers:{"Content-Type":"application/json"},
       body:JSON.stringify({system:sys, max_tokens:800, messages:messages})
     })
@@ -6097,7 +6097,7 @@ function ProactiveTipCard(p){
       ctx+="Grocery budget: $"+bd.weeklyTarget+"/week, $"+Math.round(spent)+" spent so far. ";
     }
     var ctrl=new AbortController();
-    fetch("/api/",{method:"POST",headers:{"Content-Type":"application/json"},
+    fetch("/api",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({system:"You are a personal coach. Give ONE short, specific, actionable insight in 1-2 sentences based on this person's data. Reference their actual numbers. Be direct, not generic.",messages:[{role:"user",content:ctx+"\nGive me one insight based on my data right now."}],max_tokens:100}),
       signal:ctrl.signal
     }).then(function(r){return r.json();}).then(function(d){
@@ -8650,7 +8650,7 @@ function Onboarding(p){
   }
 
   function callWorker(sys, messages, onDone, onErr){
-    fetch("/api/",{
+    fetch("/api",{
       method:"POST", headers:{"Content-Type":"application/json"},
       body:JSON.stringify({system:sys, max_tokens:800, messages:messages})
     })
@@ -9712,7 +9712,7 @@ function SmartNutritionCard(p){
   function suggest(){
     setLoading(true);setSuggestion(null);setAdded(false);
     var ctx="My remaining macros today: "+Math.round(calLeft)+" calories, "+Math.round(proLeft)+"g protein, "+Math.round(p.targets.carb-p.totalCarb)+"g carbs, "+Math.round(p.targets.fat-p.totalFat)+"g fat. Suggest ONE specific realistic meal or food that fits. Reply ONLY with JSON: {\"name\":\"...\",\"cal\":0,\"pro\":0,\"carb\":0,\"fat\":0,\"reason\":\"one sentence why this fits\"}";
-    fetch("/api/",{
+    fetch("/api",{
       method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
         system:"You are a nutrition coach. Reply ONLY with a single valid JSON object for a meal suggestion. No markdown, no explanation outside the JSON.",
@@ -10069,7 +10069,7 @@ function MealPlanFuelTab(p){
     var mealType=currentMeal.name.toLowerCase();
     setAltLoading(true);
     var prompt="Generate 4 alternative "+mealType+" options with similar calories ("+currentMeal.totalCal+" kcal) and macros ("+currentMeal.totalProtein+"g protein, "+currentMeal.totalCarb+"g carbs, "+currentMeal.totalFat+"g fat). Return ONLY a JSON array of 4 meal objects with: title, totalCal, totalProtein, totalCarb, totalFat. No markdown, no text.";
-    fetch("/api/",{
+    fetch("/api",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
@@ -10165,7 +10165,7 @@ function MealPlanFuelTab(p){
     var dailyCal=fp&&fp.tdee?fp.tdee:calcTDEE(profile);
     var dayNamesList=[];
     for(var di=0;di<days;di++){var dd=new Date();dd.setDate(dd.getDate()+di);dayNamesList.push(dayNames[dd.getDay()]);}
-    fetch("/api/",{
+    fetch("/api",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
@@ -13300,7 +13300,7 @@ function BudgetTab(){
     var recentItems=[];
     thisWeek.forEach(function(h){h.items.forEach(function(i){if(i.price>0)recentItems.push(i.name+" ($"+i.price.toFixed(2)+" at "+(h.store||"unknown")+")")});});
     var storeNames=myStores.map(function(s){return s.name+(s.description?" ("+s.description+")":"");}).join(", ");
-    fetch("/api/",{
+    fetch("/api",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
@@ -13320,7 +13320,7 @@ function BudgetTab(){
     if(!compareItem.trim()||myStores.length<2) return;
     setCompareLoading(true);
     var storeNames=myStores.map(function(s){return s.name+(s.description?" ("+s.description+")":"");}).join(", ");
-    fetch("/api/",{
+    fetch("/api",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
@@ -13601,7 +13601,7 @@ function MealPlannerTab(){
     var dayNamesList=[];
     var dayNames2=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
     for(var di=0;di<days;di++){var dd=new Date();dd.setDate(dd.getDate()+di);dayNamesList.push(dayNames2[dd.getDay()]);}
-    fetch("/api/",{
+    fetch("/api",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
@@ -15171,7 +15171,7 @@ function CoachScreen(p){
     setMsgs(function(m){return m.concat([{role:"user",text:msg}]);});
     histRef.current.push({role:"user",content:msg});
     setLoading(true);
-    fetch("/api/",{
+    fetch("/api",{
       method:"POST",headers:authHeaders(),
       body:JSON.stringify({system:buildContext(),max_tokens:1000,messages:histRef.current})
     })
