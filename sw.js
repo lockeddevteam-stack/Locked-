@@ -117,6 +117,13 @@ self.addEventListener("push", function (e) {
     options.actions = [{ action: "checkin", title: "Check in" }];
   } else if (data.type === "training") {
     options.actions = [{ action: "start", title: "Start workout" }];
+  } else if (data.type === "idle") {
+    /* Answer the "still training?" question straight from the lock screen. */
+    options.actions = [
+      { action: "continue", title: "Keep going" },
+      { action: "end", title: "End workout" }
+    ];
+    options.requireInteraction = true;
   }
 
   e.waitUntil(self.registration.showNotification(title, options));
@@ -129,9 +136,21 @@ self.addEventListener("notificationclick", function (e) {
   var target = data.url || "/";
   if (e.action === "checkin") target = "/?open=checkin";
   else if (e.action === "start") target = "/?open=workout";
+  else if (e.action === "end") target = "/?open=endworkout";
+  else if (e.action === "continue") target = "/?open=workout";
+
+  /* "Keep going" is an answer, not a request to open the app — tell any open
+     window and leave the phone alone. */
+  var quiet = e.action === "continue";
 
   e.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
+      if (quiet) {
+        list.forEach(function (c) {
+          c.postMessage({ source: "locked-push", type: "idle-continue", url: target });
+        });
+        return;
+      }
       /* Reuse an open app window rather than stacking duplicates — the page
          listens for this message and routes itself. */
       for (var i = 0; i < list.length; i++) {

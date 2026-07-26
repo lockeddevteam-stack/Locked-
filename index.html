@@ -1202,7 +1202,8 @@
     training: true,
     trainingTime: "07:30",
     checkin: true,
-    checkinTime: "08:00"
+    checkinTime: "08:00",
+    idle: true
   };
 
   /* ---- small storage helpers (the app's own keys are all "lk_"-prefixed) ---- */
@@ -1544,6 +1545,31 @@
       .then(function (res) { return res.ok; }).catch(function () { return false; });
   }
 
+  /* ---- idle workout check ----
+     Half an hour after the last thing you logged, ask whether the session is
+     still going. Rescheduled on activity, so it only fires on real silence. */
+  var _lastIdleSchedule = 0;
+
+  function scheduleIdleCheck(seconds, workoutName, force) {
+    if (!isEnabled() || getPrefs().idle === false) return Promise.resolve(false);
+    /* Every logged set would otherwise be a request; a minute of slack costs
+       nothing when the window is half an hour. */
+    if (!force && Date.now() - _lastIdleSchedule < 60000) return Promise.resolve(false);
+    _lastIdleSchedule = Date.now();
+    return post("/push/idle", {
+      deviceId: deviceId(),
+      seconds: Math.round(seconds),
+      workout: workoutName || null
+    }).then(function (res) { return res.ok; }).catch(function () { return false; });
+  }
+
+  function cancelIdleCheck() {
+    _lastIdleSchedule = 0;
+    if (!isEnabled()) return Promise.resolve(false);
+    return post("/push/idle/cancel", { deviceId: deviceId() })
+      .then(function (res) { return res.ok; }).catch(function () { return false; });
+  }
+
   function status() {
     return {
       supported: supported(),
@@ -1576,6 +1602,125 @@
     if (document.visibilityState === "visible") refresh(false);
   });
 
+  /* ---- gym alert sounds ----
+     Synthesised with WebAudio rather than shipped as files — this app is one
+     HTML document and an mp3 would be the only binary in it.
+
+     A hard limit worth being honest about: web push cannot carry a custom
+     sound. When the phone is locked and the alert comes from the server, you
+     get the system notification sound and the vibration pattern, and no API
+     exists to change that on any browser. These play when the app is on
+     screen — the phone propped on the bench, which is most of a workout. */
+  var SOUNDS = ["bell", "plate", "none"];
+  var SOUND_KEY = "lk_pushSound";
+  var _audioCtx = null;
+
+  function getSound() {
+    var v = readRaw(SOUND_KEY, "bell");
+    return SOUNDS.indexOf(v) >= 0 ? v : "bell";
+  }
+  function setSound(name) {
+    if (SOUNDS.indexOf(name) < 0) return getSound();
+    writeRaw(SOUND_KEY, name);
+    return name;
+  }
+
+  function audio() {
+    var Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return null;
+    if (!_audioCtx) _audioCtx = new Ctor();
+    /* Mobile suspends the context whenever the page is backgrounded. */
+    if (_audioCtx.state === "suspended") _audioCtx.resume().catch(function () {});
+    return _audioCtx;
+  }
+
+  /* A struck bell: a few inharmonic partials over a long exponential decay,
+     which is what makes metal sound like metal rather than like a beep. */
+  function playBell(ctx, at) {
+    var partials = [
+      { f: 660, g: 0.50, d: 1.9 },
+      { f: 1320, g: 0.28, d: 1.4 },
+      { f: 1980, g: 0.16, d: 0.9 },
+      { f: 2640, g: 0.09, d: 0.6 },
+      { f: 3500, g: 0.05, d: 0.35 }
+    ];
+    partials.forEach(function (p) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(p.f, at);
+      gain.gain.setValueAtTime(0, at);
+      gain.gain.linearRampToValueAtTime(p.g, at + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + p.d);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + p.d + 0.05);
+    });
+  }
+
+  /* Plates landing: a low thud of impact, a burst of filtered noise for the
+     clatter, and a short metallic ring on top. */
+  function playPlate(ctx, at) {
+    var thud = ctx.createOscillator();
+    var thudGain = ctx.createGain();
+    thud.type = "sine";
+    thud.frequency.setValueAtTime(140, at);
+    thud.frequency.exponentialRampToValueAtTime(42, at + 0.22);
+    thudGain.gain.setValueAtTime(0.9, at);
+    thudGain.gain.exponentialRampToValueAtTime(0.0001, at + 0.4);
+    thud.connect(thudGain).connect(ctx.destination);
+    thud.start(at);
+    thud.stop(at + 0.45);
+
+    var len = Math.floor(ctx.sampleRate * 0.35);
+    var buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    var data = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) {
+      /* Noise under a sharp decay — the scrape and rattle of the plates. */
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    }
+    var noise = ctx.createBufferSource();
+    noise.buffer = buf;
+    var bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.setValueAtTime(2600, at);
+    bp.Q.value = 0.8;
+    var noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.5, at);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, at + 0.34);
+    noise.connect(bp).connect(noiseGain).connect(ctx.destination);
+    noise.start(at);
+
+    var ring = ctx.createOscillator();
+    var ringGain = ctx.createGain();
+    ring.type = "triangle";
+    ring.frequency.setValueAtTime(1180, at);
+    ringGain.gain.setValueAtTime(0, at);
+    ringGain.gain.linearRampToValueAtTime(0.18, at + 0.01);
+    ringGain.gain.exponentialRampToValueAtTime(0.0001, at + 0.7);
+    ring.connect(ringGain).connect(ctx.destination);
+    ring.start(at);
+    ring.stop(at + 0.75);
+  }
+
+  /* Play the chosen alert. `name` overrides the preference, for previews. */
+  function playAlert(name) {
+    var choice = name || getSound();
+    if (choice === "none") return false;
+    var ctx = audio();
+    if (!ctx) return false;
+    try {
+      var at = ctx.currentTime + 0.01;
+      if (choice === "plate") playPlate(ctx, at);
+      else playBell(ctx, at);
+      /* Belt and braces on a phone in a noisy gym. */
+      if (navigator.vibrate) navigator.vibrate([180, 90, 180]);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   window.LOCKEDPush = {
     enable: enable,
     disable: disable,
@@ -1587,6 +1732,12 @@
     test: test,
     scheduleRest: scheduleRest,
     cancelRest: cancelRest,
+    scheduleIdleCheck: scheduleIdleCheck,
+    cancelIdleCheck: cancelIdleCheck,
+    getSound: getSound,
+    setSound: setSound,
+    playAlert: playAlert,
+    sounds: SOUNDS,
     buildContext: buildContext,
     deviceId: deviceId
   };
@@ -4068,6 +4219,9 @@ function WorkoutLog(p){
   var bannerRef=useRef(null);
   var [bannerH,setBannerH]=useState(0);
   var restExerciseRef=useRef(null); /* last exercise logged — names the rest notification */
+  /* "Still training?" after a long silence — see the inactivity check below. */
+  var [idlePrompt,setIdlePrompt]=useState(false);
+  var idleMinutes=30;
   var startTimeRef=useRef(null);
   var secRef=useRef(0); /* always-current sec for inactivity handler without adding sec to effect deps */
   var [lastActivityTime,setLastActivityTime]=useState(Date.now());
@@ -4096,10 +4250,12 @@ function WorkoutLog(p){
     var inactivityCheck=setInterval(function(){
       var elapsed=Date.now()-lastActivityTime;
       if(elapsed>inactivityLimit){
-        /* Auto-end workout after 30 min of inactivity */
-        clearInterval(t);
+        /* Half an hour with nothing logged. This used to end the session
+           outright — including the sets you had already done, without asking.
+           Now it asks, and the same question goes out as a notification for
+           when the app is not on screen. */
         clearInterval(inactivityCheck);
-        if(p.onFinish){p.onFinish(rows,secRef.current);}
+        setIdlePrompt(true);
       }
     },5000);
     return function(){clearInterval(t);clearInterval(inactivityCheck);};
@@ -4131,6 +4287,9 @@ function WorkoutLog(p){
           restStartRef.current=null;
           setRestSec(0);
           setRestActive(false);
+          /* The push covers a locked phone; this covers the far more common
+             case of the phone sitting on the bench with the app open. */
+          if(window.LOCKEDPush) window.LOCKEDPush.playAlert();
         } else {
           setRestSec(remaining);
         }
@@ -4140,6 +4299,17 @@ function WorkoutLog(p){
     }
     return function(){if(restRef.current){clearInterval(restRef.current);restRef.current=null;}};
   },[restActive,restTarget]); /* restSec intentionally excluded — adding it recreates the interval every tick */
+
+  /* Anything the user logs counts as activity: it resets the local idle
+     timer and pushes the server-side "still training?" check back out. */
+  function noteActivity(force){
+    setLastActivityTime(Date.now());
+    setIdlePrompt(false);
+    /* Logging a set is throttled — it happens constantly. Answering "still
+       training" is not: that has to re-arm the check there and then, or the
+       question comes straight back. */
+    if(window.LOCKEDPush) window.LOCKEDPush.scheduleIdleCheck(idleMinutes*60,p.name,force===true);
+  }
 
   /* Hand the rest timer to the server as well as running it locally.
      Once the phone locks, the in-page interval below is frozen — the push
@@ -4160,6 +4330,28 @@ function WorkoutLog(p){
   useEffect(function(){
     window.dispatchEvent(new CustomEvent("lockedRest",{detail:{active:restActive,remaining:restSec}}));
   },[restActive,restSec]);
+
+  /* Arm the "still training?" check for the life of the session. */
+  useEffect(function(){
+    if(window.LOCKEDPush) window.LOCKEDPush.scheduleIdleCheck(idleMinutes*60,p.name,true);
+    function onOpen(e){
+      var d=e.detail||{};
+      if(d.type==="idle-continue"){noteActivity(true);return;}
+      if(String(d.url||"").indexOf("endworkout")>-1) setIdlePrompt(true);
+    }
+    window.addEventListener("lockedPushOpen",onOpen);
+    return function(){
+      window.removeEventListener("lockedPushOpen",onOpen);
+      if(window.LOCKEDPush) window.LOCKEDPush.cancelIdleCheck();
+    };
+  },[]);
+
+  /* A cold start from the notification lands here with ?open=endworkout. */
+  useEffect(function(){
+    try{
+      if(new URLSearchParams(window.location.search).get("open")==="endworkout") setIdlePrompt(true);
+    }catch(e){}
+  },[]);
   useEffect(function(){
     return function(){
       window.dispatchEvent(new CustomEvent("lockedRest",{detail:{active:false,remaining:0}}));
@@ -4252,7 +4444,7 @@ function WorkoutLog(p){
   var totalVol=rows.reduce(function(a,r){if(r.type==="block")return a;return a+r.sets.filter(function(s){return s.done&&s.setType!=="warmup";}).reduce(function(b,s){return b+(parseFloat(s.w)||0)*(parseInt(s.r)||0);},0);},0);
 
   function setVal(ri,si,field,val){
-    setLastActivityTime(Date.now());
+    noteActivity();
     setRows(function(prev){
       return prev.map(function(row,i){
         if(i!==ri)return row;
@@ -4268,7 +4460,7 @@ function WorkoutLog(p){
     });
   }
   function toggleDone(ri,si){
-    setLastActivityTime(Date.now());
+    noteActivity();
     if(navigator.vibrate) navigator.vibrate(30);
     setCompletedSetAnim(ri+","+si);
     setTimeout(function(){setCompletedSetAnim(null);},400);
@@ -4511,6 +4703,25 @@ function WorkoutLog(p){
         </div>
       )}
       {showExDetail&&<ExerciseDetailModal exercise={showExDetail} onClose={function(){setShowExDetail(null);}}/>}
+      {idlePrompt&&(
+        <div role="dialog" aria-label="Still training?" style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.66)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2100,padding:20}}>
+          <div style={{background:CARD,borderRadius:16,padding:"22px 20px",maxWidth:330,width:"100%",border:"1px solid "+BORD}}>
+            <p style={{fontSize:16,fontWeight:700,color:TX,marginBottom:6}}>Still training?</p>
+            <p style={{fontSize:13,color:MU,marginBottom:18,lineHeight:1.55}}>
+              Nothing logged for {idleMinutes} minutes on <strong>{p.name||"this workout"}</strong>. Keep going, or end it here and log how it went.
+            </p>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={function(){noteActivity(true);}} style={{flex:1,padding:"13px",borderRadius:10,border:"1px solid "+BORD,background:"transparent",color:TX,fontSize:14,fontWeight:700,cursor:"pointer"}}>No, continue</button>
+              <button onClick={function(){
+                setIdlePrompt(false);
+                cancelPushRest();
+                if(window.LOCKEDPush) window.LOCKEDPush.cancelIdleCheck();
+                if(p.onFinish) p.onFinish(rows,secRef.current);
+              }} style={{flex:1,padding:"13px",borderRadius:10,border:"none",background:"linear-gradient(135deg,"+OR_H+",#EA580C)",color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>End &amp; review</button>
+            </div>
+          </div>
+        </div>
+      )}
       {(prMsg||restActive)&&(
       <div ref={bannerRef} style={{position:"fixed",top:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:420,zIndex:200,paddingTop:"env(safe-area-inset-top, 0px)",background:"rgba(8,8,9,0.98)"}}>
       {prMsg&&(
@@ -4612,8 +4823,8 @@ function WorkoutLog(p){
                 </div>
               )}
             </div>
-            <button onClick={function(){if(window.confirm("Discard this workout? All progress will be lost.")){cancelPushRest();p.onDiscard();}}} style={{padding:"10px 14px",borderRadius:10,border:"1px solid "+RE_H+"40",background:RE_H+"12",color:RE,fontFamily:"Barlow Condensed,sans-serif",fontSize:14,fontWeight:700,cursor:"pointer"}}>DISCARD</button>
-            <button onClick={function(){cancelPushRest();p.onFinish(rows,sec);}} style={{padding:"10px 18px",borderRadius:10,border:"none",background:OR,color:"#fff",fontFamily:"Barlow Condensed,sans-serif",fontSize:16,fontWeight:700,cursor:"pointer"}}>FINISH</button>
+            <button onClick={function(){if(window.confirm("Discard this workout? All progress will be lost.")){cancelPushRest();if(window.LOCKEDPush)window.LOCKEDPush.cancelIdleCheck();p.onDiscard();}}} style={{padding:"10px 14px",borderRadius:10,border:"1px solid "+RE_H+"40",background:RE_H+"12",color:RE,fontFamily:"Barlow Condensed,sans-serif",fontSize:14,fontWeight:700,cursor:"pointer"}}>DISCARD</button>
+            <button onClick={function(){cancelPushRest();if(window.LOCKEDPush)window.LOCKEDPush.cancelIdleCheck();p.onFinish(rows,sec);}} style={{padding:"10px 18px",borderRadius:10,border:"none",background:OR,color:"#fff",fontFamily:"Barlow Condensed,sans-serif",fontSize:16,fontWeight:700,cursor:"pointer"}}>FINISH</button>
           </div>
         </div>
       </div>
@@ -8136,6 +8347,7 @@ function NotificationsCard(){
   var [testing,setTesting]=useState(false);
   var [err,setErr]=useState("");
   var [note,setNote]=useState("");
+  var [sound,setSound]=useState(function(){return P?P.getSound():"bell";});
   var prefs=st.prefs||{};
 
   function reread(){if(P)setSt(P.status());}
@@ -8234,6 +8446,23 @@ function NotificationsCard(){
                 onToggle={function(){setPref({checkin:prefs.checkin===false});}}/>
               {prefs.checkin!==false&&<TimeRow label="Send at" value={prefs.checkinTime||"08:00"}
                 onChange={function(v){setPref({checkinTime:v});}}/>}
+
+              <Row title="Unfinished workout" sub={"Asks after "+30+" quiet minutes instead of ending it for you"} on={prefs.idle!==false}
+                onToggle={function(){setPref({idle:prefs.idle===false});}}/>
+
+              <div style={{background:SU,borderRadius:10,padding:"12px 14px",border:"1px solid "+BORD}}>
+                <p style={{fontSize:13,fontWeight:600,color:TX,margin:0}}>Rest timer sound</p>
+                <p style={{fontSize:11,color:MU,margin:"1px 0 10px",lineHeight:1.45}}>Plays when the app is on screen. A locked phone uses your system notification sound — no browser lets a website change that.</p>
+                <div style={{display:"flex",gap:6}}>
+                  {[["bell","Bell"],["plate","Plates"],["none","Silent"]].map(function(opt){
+                    var act=sound===opt[0];
+                    return <button key={opt[0]} onClick={function(){
+                      setSound(P.setSound(opt[0]));
+                      if(opt[0]!=="none") P.playAlert(opt[0]);
+                    }} style={{flex:1,padding:"10px 6px",borderRadius:9,border:"1.5px solid "+(act?OR:BORD),background:act?OR_H+"15":"transparent",color:act?OR:MU,fontSize:13,fontWeight:act?700:500,cursor:"pointer"}}>{opt[1]}</button>;
+                  })}
+                </div>
+              </div>
 
               <button onClick={sendTest} disabled={testing}
                 style={{width:"100%",padding:"11px",borderRadius:9,border:"1px solid "+BORD,background:"transparent",color:TX,fontSize:13,fontWeight:600,cursor:testing?"default":"pointer",opacity:testing?0.6:1}}>
