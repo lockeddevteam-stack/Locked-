@@ -1265,6 +1265,22 @@
       ("0" + d.getDate()).slice(-2);
   }
 
+  /* Mirrors the app's dayOf(): a stored ISO timestamp has to be read in the
+     user's calendar, or an evening check-in looks like tomorrow's. */
+  function dayOf(v) {
+    if (!v) return null;
+    var str = String(v);
+    if (str.indexOf("T") > 0) {
+      var d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        return d.getFullYear() + "-" +
+          ("0" + (d.getMonth() + 1)).slice(-2) + "-" +
+          ("0" + d.getDate()).slice(-2);
+      }
+    }
+    return str.slice(0, 10);
+  }
+
   /* ---- capability detection ---- */
 
   function isIOS() {
@@ -1316,7 +1332,7 @@
 
     var trainedTodayISO = null;
     for (var hi = 0; hi < history.length; hi++) {
-      if (history[hi].dateISO && history[hi].dateISO.slice(0, 10) === today) {
+      if (dayOf(history[hi].dateISO) === today) {
         trainedTodayISO = today;
         break;
       }
@@ -1333,7 +1349,7 @@
         ("0" + cursor.getDate()).slice(-2);
       var found = false;
       for (var wj = 0; wj < history.length; wj++) {
-        if (history[wj].dateISO && history[wj].dateISO.slice(0, 10) === iso) { found = true; break; }
+        if (dayOf(history[wj].dateISO) === iso) { found = true; break; }
       }
       if (!found) break;
       streak++;
@@ -1342,7 +1358,7 @@
 
     var checkinISO = null;
     for (var fi = 0; fi < feedback.length; fi++) {
-      if (feedback[fi].date && feedback[fi].date.slice(0, 10) === today) { checkinISO = today; break; }
+      if (dayOf(feedback[fi].date) === today) { checkinISO = today; break; }
     }
 
     return {
@@ -2025,6 +2041,106 @@ try{localStorage.setItem("test",1);localStorage.removeItem("test");storageAvaila
 function ld(k,fb){try{if(!storageAvailable)return fb;var v=localStorage.getItem("lk_"+k);return v?JSON.parse(v):fb;}catch(e){return fb;}}
 function sd(k,v){try{if(storageAvailable)localStorage.setItem("lk_"+k,JSON.stringify(v));}catch(e){}}
 
+/* Local calendar day as YYYY-MM-DD.
+   toISOString() reports the day in UTC, so west of Greenwich an evening
+   session was filed under tomorrow: a 7pm workout in UTC-5 landed on the next
+   day, which threw off "trained today", streaks, the food diary and every
+   date comparison built on them. Everything that means "today" — or the day a
+   given Date falls on — goes through here. */
+function isoDay(d){
+  var t=d||new Date();
+  return t.getFullYear()+"-"+("0"+(t.getMonth()+1)).slice(-2)+"-"+("0"+t.getDate()).slice(-2);
+}
+
+/* Consecutive days ending today, counted backwards. A day you have not logged
+   *yet* does not break the streak — it only breaks once a whole day has gone
+   by with nothing in it. The three copies of this used to disagree: the home
+   feed counted today twice, while the profile and supplement counters dropped
+   to zero every morning until you logged something. */
+/* The calendar day a stored date belongs to. Records are a mix: workouts save
+   a plain YYYY-MM-DD, while check-ins, photos and weigh-ins save a full ISO
+   timestamp. Slicing the first ten characters off a timestamp gives its UTC
+   day, so an 8pm check-in in UTC-5 was filed under tomorrow and the app kept
+   insisting you had not checked in. A bare date string is already a calendar
+   day and is left alone. */
+function dayOf(v){
+  if(!v) return null;
+  var str=String(v);
+  if(str.indexOf("T")>0){
+    var d=new Date(str);
+    return isNaN(d.getTime())?str.slice(0,10):isoDay(d);
+  }
+  return str.slice(0,10);
+}
+
+function dayStreak(hasDay,maxDays){
+  var d=new Date();
+  if(!hasDay(isoDay(d))) d.setDate(d.getDate()-1);
+  var n=0;
+  for(var i=0;i<(maxDays||400);i++){
+    if(!hasDay(isoDay(d))) break;
+    n++;
+    d.setDate(d.getDate()-1);
+  }
+  return n;
+}
+
+/* Weight display. Converting kg to lb produces numbers nobody loads on a bar
+   (100 kg reads as 220.462 lb), and rounding to one decimal still leaves
+   things like 220.5 / 92.1 / 47.3. Displayed weights are snapped to the
+   nearest quarter unit — the smallest plate increment in practice — and
+   printed without trailing zeros: 220.5, 100, 42.25. */
+function wNum(kg,useKg){
+  if(kg===null||kg===undefined||kg==="") return kg;
+  var n=parseFloat(kg);
+  if(isNaN(n)) return 0;
+  return Math.round((useKg?n:n*2.20462)*4)/4;
+}
+
+/* ---- Unit preference -------------------------------------------------
+   The kg/lb choice is what every weight in the app is read against, so a
+   silent change to it rewrites the meaning of the user's whole history on
+   screen. It used to live only on the synced profile object, which meant a
+   cloud copy written before the user picked pounds — or any profile write
+   that dropped the field — could flip them back to kg without a word.
+
+   The explicit choice is now pinned in a device-local key that never syncs
+   and is never defaulted. The profile still carries useKg so other surfaces
+   and new devices see it; the pin simply wins when the two disagree. */
+var UNIT_PIN="unitPref";
+function getUnitPin(){
+  var v=ld(UNIT_PIN,null);
+  return v===true||v===false?v:null;
+}
+function setUnitPin(useKg){sd(UNIT_PIN,!!useKg);}
+/* Effective unit: the user's explicit pin, else whatever the profile says,
+   else kg. Never invents a value when one is already known. */
+function resolveUseKg(profile){
+  var pinned=getUnitPin();
+  if(pinned!==null) return pinned;
+  if(profile&&typeof profile.useKg==="boolean") return profile.useKg;
+  return true;
+}
+/* Runs before anything reads a weight. Existing users predate the pin, so
+   adopt whatever their profile says now; afterwards the pin is authoritative
+   and a profile pulled from the cloud with the wrong unit is corrected rather
+   than obeyed. */
+(function reconcileUnitChoice(){
+  try{
+    if(!storageAvailable) return;
+    var prof=ld("profile",null);
+    var pinned=getUnitPin();
+    if(pinned===null){
+      if(prof&&typeof prof.useKg==="boolean") setUnitPin(prof.useKg);
+      return;
+    }
+    if(prof&&prof.useKg!==pinned){
+      prof.useKg=pinned;
+      sd("profile",prof);
+    }
+  }catch(e){}
+})();
+
 /* ---- Compatibility: undo the canonical-kg set-weight migration -------
    A parallel build briefly stored workout set weights canonically in kg,
    converting lb users' history on first load and stamping
@@ -2037,7 +2153,11 @@ function sd(k,v){try{if(storageAvailable)localStorage.setItem("lk_"+k,JSON.strin
     if(!storageAvailable) return;
     if(!ld("weightsKgMigrated",false)) return;
     var prof=ld("profile",null);
-    var isLb=prof?prof.useKg===false:false;
+    /* No profile yet means we cannot tell which unit this data is in. Leave
+       the flag alone and try again next boot — clearing it here used to strand
+       lb users with a history stuck in kg. */
+    if(!prof||typeof prof.useKg!=="boolean") return;
+    var isLb=prof.useKg===false;
     if(isLb){
       var toLb=function(v){var n=parseFloat(v);return isNaN(n)?v:String(Math.round(n*2.20462*10)/10);};
       var hist=ld("history",null);
@@ -2303,7 +2423,7 @@ function syncBetaData(onDone,onFail){
     var now=new Date();
     if(now.getHours()===0&&now.getMinutes()===0){
       var lastSync=ld("lastSync","");
-      var today=now.toISOString().slice(0,10);
+      var today=isoDay(now);
       if(!lastSync||lastSync.slice(0,10)!==today){
         syncBetaData();
       }
@@ -2343,7 +2463,7 @@ function resizeImage(file,maxW,cb){
 function getWeightLog(){return ld("weightLog",[]);}
 function addWeightEntry(kg){
   var log=getWeightLog();
-  var today=new Date().toISOString().slice(0,10);
+  var today=isoDay();
   var existing=false;
   for(var i=0;i<log.length;i++){if(log[i].date===today){log[i].kg=kg;existing=true;break;}}
   if(!existing) log.push({date:today,kg:kg});
@@ -2373,7 +2493,7 @@ function weeklyRatePct(trendArr){
   if(!trendArr||trendArr.length<2)return null;
   var last=trendArr[trendArr.length-1];
   var d=new Date(last.date);d.setDate(d.getDate()-7);
-  var prev=trendOnOrBefore(trendArr,d.toISOString().slice(0,10))||trendArr[0];
+  var prev=trendOnOrBefore(trendArr,isoDay(d))||trendArr[0];
   var days=(new Date(last.date)-new Date(prev.date))/86400000;
   if(days<=0)return null;
   var perWeekKg=(last.trend-prev.trend)/days*7;
@@ -2385,7 +2505,7 @@ function avgIntake(fuelLog,days){
   var total=0,counted=0;
   for(var i=0;i<days;i++){
     var d=new Date();d.setDate(d.getDate()-i);
-    var day=(fuelLog||{})[d.toISOString().slice(0,10)];
+    var day=(fuelLog||{})[isoDay(d)];
     if(!day||!day.meals)continue;
     var cal=0,items=0;
     ["breakfast","lunch","dinner","snacks"].forEach(function(mk){
@@ -2401,13 +2521,13 @@ function reconcileTDEE(fuelLog,weightLog,profile){
   if(!profile) return null;
   var windowDays=14;
   var startD=new Date();startD.setDate(startD.getDate()-(windowDays-1));
-  var startISO=startD.toISOString().slice(0,10);
-  var todayISO=new Date().toISOString().slice(0,10);
+  var startISO=isoDay(startD);
+  var todayISO=isoDay();
 
   var validDays=0,totalCal=0;
   for(var i=0;i<windowDays;i++){
     var d=new Date();d.setDate(d.getDate()-i);
-    var day=(fuelLog||{})[d.toISOString().slice(0,10)];
+    var day=(fuelLog||{})[isoDay(d)];
     if(!day||!day.meals)continue;
     var cal=0,slotsWithFood=0;
     ["breakfast","lunch","dinner","snacks"].forEach(function(mk){
@@ -2449,7 +2569,7 @@ function applyAdaptiveTDEE(){
     if(daysSince<=6) return null;
   }
   var rec=reconcileTDEE(ld("fuelLog",{}),getWeightLog(),profile);
-  var todayISO=new Date().toISOString().slice(0,10);
+  var todayISO=isoDay();
   if(!rec){
     return null;
   }
@@ -2479,14 +2599,14 @@ function checkRefeedTrigger(weightLog,fuelProfile){
     if(daysAgo<10) return false;
   }
   var accepted=ld("refeedAccepted",null);
-  var today=new Date().toISOString().slice(0,10);
+  var today=isoDay();
   if(accepted===today) return false;
   if(accepted){
     var accAgo=(Date.now()-new Date(accepted+"T00:00:00").getTime())/86400000;
     if(accAgo<10) return false;
   }
   var d=new Date(last.date);d.setDate(d.getDate()-14);
-  var prev=trendOnOrBefore(trend,d.toISOString().slice(0,10))||trend[0];
+  var prev=trendOnOrBefore(trend,isoDay(d))||trend[0];
   if(!(prev.trend>0)) return false;
   var drop=(prev.trend-last.trend)/prev.trend;
   return drop>=0.005; /* trend down ≥0.5% over the last 14 days */
@@ -3762,7 +3882,7 @@ function NumPad(p){
   }
   var keys=["1","2","3","4","5","6","7","8","9",".","0","del"];
   return (
-    <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:420,background:SURF,borderTop:"1px solid "+BORD,zIndex:300,paddingBottom:20}}>
+    <div role="dialog" aria-label={p.label+" entry"} style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:420,background:SURF,borderTop:"1px solid "+BORD,zIndex:300,paddingBottom:20}}>
       <div style={{padding:"10px 16px 6px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <p style={{fontSize:12,color:MU,fontWeight:600}}>{p.label}</p>
         <div style={{display:"flex",alignItems:"baseline",gap:4}}>
@@ -3940,6 +4060,13 @@ function WorkoutLog(p){
   var [showTools,setShowTools]=useState(false);
   var restRef=useRef(null);
   var restStartRef=useRef(null);
+  /* The PR and rest banners are pinned over the top of the page. Their height
+     changes (rest bar appears, custom-duration inputs expand, PR banner
+     stacks), so it is measured rather than guessed — a hardcoded offset left
+     the banner sitting on top of the workout header, and under the status bar
+     on an installed phone app. */
+  var bannerRef=useRef(null);
+  var [bannerH,setBannerH]=useState(0);
   var restExerciseRef=useRef(null); /* last exercise logged — names the rest notification */
   var startTimeRef=useRef(null);
   var secRef=useRef(0); /* always-current sec for inactivity handler without adding sec to effect deps */
@@ -4025,6 +4152,30 @@ function WorkoutLog(p){
   function cancelPushRest(){
     if(window.LOCKEDPush)window.LOCKEDPush.cancelRest();
   }
+
+  /* The workout screen is kept mounted but hidden while you browse other
+     tabs, which took the rest banner with it — the timer was still running,
+     you just could not see it. Publish the countdown so the in-progress bar
+     can show it from anywhere in the app. */
+  useEffect(function(){
+    window.dispatchEvent(new CustomEvent("lockedRest",{detail:{active:restActive,remaining:restSec}}));
+  },[restActive,restSec]);
+  useEffect(function(){
+    return function(){
+      window.dispatchEvent(new CustomEvent("lockedRest",{detail:{active:false,remaining:0}}));
+    };
+  },[]);
+
+  React.useLayoutEffect(function(){
+    var el=bannerRef.current;
+    if(!el){setBannerH(0);return;}
+    function measure(){setBannerH(el.offsetHeight||0);}
+    measure();
+    if(typeof ResizeObserver==="undefined") return;
+    var ro=new ResizeObserver(measure);
+    ro.observe(el);
+    return function(){ro.disconnect();};
+  });
 
   function startRest(secs,exName){
     sd("activeWorkoutRestTarget",secs);
@@ -4359,14 +4510,16 @@ function WorkoutLog(p){
           </div>
         </div>
       )}
+      {showExDetail&&<ExerciseDetailModal exercise={showExDetail} onClose={function(){setShowExDetail(null);}}/>}
+      {(prMsg||restActive)&&(
+      <div ref={bannerRef} style={{position:"fixed",top:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:420,zIndex:200,paddingTop:"env(safe-area-inset-top, 0px)",background:"rgba(8,8,9,0.98)"}}>
       {prMsg&&(
-        <div style={{position:"fixed",top:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:420,zIndex:200,background:"linear-gradient(90deg,"+OR_H+",#EA580C)",padding:"13px 20px",display:"flex",alignItems:"center",gap:10,animation:"scalePopOut 0.4s ease-out, glowPulse 1s ease-in-out 0.2s"}}>
+        <div style={{background:"linear-gradient(90deg,"+OR_H+",#EA580C)",padding:"13px 20px",display:"flex",alignItems:"center",gap:10,animation:"scalePopOut 0.4s ease-out, glowPulse 1s ease-in-out 0.2s"}}>
           <Ic d={D.trophy} z={20} c="#fff"/><div><p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:17,fontWeight:800,color:"#fff"}}>ALL-TIME PR!</p><p style={{fontSize:12,color:"rgba(255,255,255,.8)"}}>{prMsg}</p></div>
         </div>
       )}
-      {showExDetail&&<ExerciseDetailModal exercise={showExDetail} onClose={function(){setShowExDetail(null);}}/>}
       {restActive&&(
-        <div style={{position:"fixed",top:prMsg?56:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:420,zIndex:190,background:"rgba(8,8,9,0.98)",borderBottom:"1px solid "+BORD,padding:"12px 16px",animation:"slideDownBanner 0.3s ease-out"}}>
+        <div style={{background:"rgba(8,8,9,0.98)",borderBottom:"1px solid "+BORD,padding:"12px 16px",animation:"slideDownBanner 0.3s ease-out"}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <div style={{position:"relative",width:52,height:52,flexShrink:0}}>
               <svg width={52} height={52} style={{transform:"rotate(-90deg)"}}>
@@ -4425,7 +4578,11 @@ function WorkoutLog(p){
           </div>
         </div>
       )}
-      <div style={{position:"sticky",top:0,zIndex:50,background:"rgba(10,10,12,0.78)",borderBottom:"1px solid "+BORD,padding:restActive?"62px 20px 12px":"50px 20px 12px",transition:"padding 0.2s ease"}}>
+      </div>
+      )}
+      {/* Holds the page open under the pinned banners so nothing hides behind them. */}
+      {bannerH>0&&<div style={{height:bannerH}} aria-hidden="true"/>}
+      <div style={{position:"sticky",top:bannerH,zIndex:50,background:"rgba(10,10,12,0.78)",borderBottom:"1px solid "+BORD,padding:(bannerH>0?"12px":"50px")+" 20px 12px",transition:"padding 0.2s ease"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <h1 style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:21,fontWeight:800}}>{p.name||"Workout"}</h1>
@@ -4653,7 +4810,7 @@ function WorkoutLog(p){
                 </div>
                 <div style={{flex:1}}><p style={{fontWeight:700,fontSize:15,color:TX}}>{row.name}</p><p style={{fontSize:12,color:MU,marginTop:1}}>{row.muscle}{row.startResist>0&&<span style={{color:"#60A5FA",fontSize:10,marginLeft:6}}>· +{row.startResist}kg base</span>}{row.lastDate&&<span style={{color:OR_H+"90",fontSize:10,marginLeft:6}}>· Last: {row.lastDate}</span>}</p></div>
                 {row.supersetId&&<div style={{background:OR_H+"15",borderRadius:6,padding:"2px 6px",border:"1px solid "+OR_H+"40",flexShrink:0}}><span style={{fontSize:9,color:OR,fontWeight:800,letterSpacing:"0.04em"}}>SS</span></div>}
-                {best&&<div style={{background:"#F59E0B18",borderRadius:6,padding:"2px 7px",border:"1px solid #F59E0B30"}}><span style={{fontSize:10,color:"#F59E0B",fontWeight:700}}>{useKg?Math.round(best.w*10)/10:Math.round(best.w*2.20462*10)/10}{unit} PR</span></div>}
+                {best&&<div style={{background:"#F59E0B18",borderRadius:6,padding:"2px 7px",border:"1px solid #F59E0B30"}}><span style={{fontSize:10,color:"#F59E0B",fontWeight:700}}>{wNum(best.w,useKg)}{unit} PR</span></div>}
                 <button onClick={function(){setShowExDetail(row);}} style={{padding:"3px 7px",borderRadius:6,border:"1px solid "+BLU_H+"40",background:BLU_H+"10",color:BLU,fontSize:10,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:3}} title="Exercise details">
                   <Ic d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" z={10} c={BLU}/>
                 </button>
@@ -4711,7 +4868,7 @@ function WorkoutLog(p){
                           </div>
                         <div style={{display:"grid",gridTemplateColumns:"20px 1fr 1fr 1fr 42px 32px",gap:4,alignItems:"center",opacity:set.done?0.5:rowOpacity,transform:"translateX("+swipeDx+"px)",transition:isSwipe?"none":"transform .2s",background:rowBg}}>
                           <button onClick={function(){toggleSetType(ri,si);}} title="Tap to cycle: Normal → Warmup → Drop" style={{background:"none",border:"none",cursor:"pointer",padding:0,textAlign:"center",fontSize:11,color:typeColor,fontWeight:800}}>{displayNum}</button>
-                          <button onClick={function(){setNumpadTarget({ri:ri,si:si,field:"w",label:"Weight",unit:rowUnit});}} style={{background:SU,border:"1px solid "+(set.done?OR_H+"50":set.rec?OR_H+"25":BORD),borderRadius:6,padding:"7px 2px",color:wCol,fontSize:12,textAlign:"center",width:"100%",cursor:"pointer",fontWeight:set.w&&!set.rec?600:400}}>{set.w||"--"}</button>
+                          <button onClick={function(){setNumpadTarget({ri:ri,si:si,field:"w",label:"Weight",unit:rowUnit});}} aria-label={"Set "+(si+1)+" weight"} style={{background:SU,border:"1px solid "+(set.done?OR_H+"50":set.rec?OR_H+"25":BORD),borderRadius:6,padding:"7px 2px",color:wCol,fontSize:12,textAlign:"center",width:"100%",cursor:"pointer",fontWeight:set.w&&!set.rec?600:400}}>{set.w||"--"}</button>
                           <button onClick={function(){setNumpadTarget({ri:ri,si:si,field:"rL",label:"Left Reps",unit:"reps"});}} style={{background:"#3B82F610",border:"1px solid "+(set.done?"#3B82F650":BORD),borderRadius:6,padding:"7px 2px",color:set.rL?(set.rec?MU:"#3B82F6"):MU,fontSize:12,textAlign:"center",width:"100%",cursor:"pointer",fontWeight:set.rL&&!set.rec?600:400}}>{set.rL||"--"}</button>
                           <button onClick={function(){setNumpadTarget({ri:ri,si:si,field:"rR",label:"Right Reps",unit:"reps"});}} style={{background:"#EC489910",border:"1px solid "+(set.done?"#EC489950":BORD),borderRadius:6,padding:"7px 2px",color:set.rR?(set.rec?MU:"#EC4899"):MU,fontSize:12,textAlign:"center",width:"100%",cursor:"pointer",fontWeight:set.rR&&!set.rec?600:400}}>{set.rR||"--"}</button>
                           <select value={set.rir} onChange={function(e){setVal(ri,si,"rir",e.target.value);}} style={{background:SU,border:"1px solid "+BORD,borderRadius:6,padding:"7px 2px",color:TX,fontSize:12,outline:"none",cursor:"pointer",width:"100%",textAlign:"center"}}>
@@ -4763,8 +4920,8 @@ function WorkoutLog(p){
                           </div>
                         <div style={{display:"grid",gridTemplateColumns:"20px 1fr 1fr 42px 32px",gap:4,alignItems:"center",opacity:set.done?0.5:rowOpacity,transform:"translateX("+swipeDx+"px)",transition:isSwipe?"none":"transform .2s",background:rowBg,animation:completedSetAnim===ri+","+si?"scalePopOut 0.3s ease-out":"none"}}>
                           <button onClick={function(){toggleSetType(ri,si);}} title="Tap to cycle: Normal → Warmup → Drop" style={{background:"none",border:"none",cursor:"pointer",padding:0,textAlign:"center",fontSize:11,color:typeColor,fontWeight:800}}>{displayNum}</button>
-                          <button onClick={function(){setNumpadTarget({ri:ri,si:si,field:"w",label:"Weight",unit:rowUnit});}} style={{background:SU,border:"1px solid "+(set.done?OR_H+"50":set.rec?OR_H+"25":BORD),borderRadius:6,padding:"7px 3px",color:wCol,fontSize:13,textAlign:"center",width:"100%",cursor:"pointer",fontWeight:set.w&&!set.rec?600:400}}>{set.w||"--"}</button>
-                          <button onClick={function(){setNumpadTarget({ri:ri,si:si,field:"r",label:"Reps",unit:"reps"});}} style={{background:SU,border:"1px solid "+(set.done?OR_H+"50":set.rec?OR_H+"25":BORD),borderRadius:6,padding:"7px 3px",color:rCol,fontSize:13,textAlign:"center",width:"100%",cursor:"pointer",fontWeight:set.r&&!set.rec?600:400,position:"relative"}}>{set.r||"--"}{set.partials&&<span style={{position:"absolute",top:-4,right:-2,background:"#8B5CF6",color:"#fff",fontSize:8,fontWeight:800,padding:"1px 4px",borderRadius:6,letterSpacing:"0.04em"}}>+{set.partials}P</span>}</button>
+                          <button onClick={function(){setNumpadTarget({ri:ri,si:si,field:"w",label:"Weight",unit:rowUnit});}} aria-label={"Set "+(si+1)+" weight"} style={{background:SU,border:"1px solid "+(set.done?OR_H+"50":set.rec?OR_H+"25":BORD),borderRadius:6,padding:"7px 3px",color:wCol,fontSize:13,textAlign:"center",width:"100%",cursor:"pointer",fontWeight:set.w&&!set.rec?600:400}}>{set.w||"--"}</button>
+                          <button onClick={function(){setNumpadTarget({ri:ri,si:si,field:"r",label:"Reps",unit:"reps"});}} aria-label={"Set "+(si+1)+" reps"} style={{background:SU,border:"1px solid "+(set.done?OR_H+"50":set.rec?OR_H+"25":BORD),borderRadius:6,padding:"7px 3px",color:rCol,fontSize:13,textAlign:"center",width:"100%",cursor:"pointer",fontWeight:set.r&&!set.rec?600:400,position:"relative"}}>{set.r||"--"}{set.partials&&<span style={{position:"absolute",top:-4,right:-2,background:"#8B5CF6",color:"#fff",fontSize:8,fontWeight:800,padding:"1px 4px",borderRadius:6,letterSpacing:"0.04em"}}>+{set.partials}P</span>}</button>
                           <select value={set.rir} onChange={function(e){setVal(ri,si,"rir",e.target.value);}} style={{background:SU,border:"1px solid "+BORD,borderRadius:6,padding:"7px 2px",color:TX,fontSize:12,outline:"none",cursor:"pointer",width:"100%",textAlign:"center"}}>
                             {[0,1,2,3,4,"5+"].map(function(v){return <option key={v} value={v}>{v}</option>;})}
                           </select>
@@ -5422,7 +5579,10 @@ function Review(p){
   var totalSets=rows.reduce(function(a,r){if(r.type==="block")return a;return a+r.sets.filter(function(s){return s.done&&s.setType!=="warmup";}).length;},0);
   var totalVol=rows.reduce(function(a,r){if(r.type==="block")return a;return a+r.sets.filter(function(s){return s.done&&s.setType!=="warmup";}).reduce(function(b,s){return b+(parseFloat(s.w)||0)*(parseInt(s.r)||0);},0);},0);
   var dur=Math.floor((p.sec||0)/60);
-  var dispVol=useKg?Math.round(totalVol):Math.round(totalVol*2.20462);
+  /* Set weights are stored in the unit they were entered in, so the total is
+     already in the display unit — converting again inflated every lb user's
+     volume by 2.2x. */
+  var dispVol=Math.round(totalVol);
 
   function setRating(key,val){setRatings(function(prev){var n=Object.assign({},prev);n[key]=val;return n;});}
 
@@ -5431,7 +5591,7 @@ function Review(p){
       return {id:r.id,name:r.name,muscle:r.muscle,sets:r.sets.filter(function(s){return s.done;}).map(function(s){var set={w:s.w,r:s.r,rir:s.rir,done:true};if(s.setType&&s.setType!=="normal")set.setType=s.setType;if(s.rL)set.rL=s.rL;if(s.rR)set.rR=s.rR;if(s.partials)set.partials=s.partials;return set;})};
     });
     var blocks=rows.filter(function(r){return r.type==="block";}).map(function(r){return {title:r.title,notes:r.notes||"",duration:r.duration||null};});
-    p.onSave({name:p.name,sets:totalSets,vol:dispVol+" "+unit,dur:dur+" min",date:new Date().toLocaleDateString(),dateISO:new Date().toISOString().slice(0,10),reflection:ratings,note:note,exercises:exercises,blocks:blocks.length>0?blocks:null,aiInsight:aiText||null});
+    p.onSave({name:p.name,sets:totalSets,vol:dispVol+" "+unit,dur:dur+" min",date:new Date().toLocaleDateString(),dateISO:isoDay(),reflection:ratings,note:note,exercises:exercises,blocks:blocks.length>0?blocks:null,aiInsight:aiText||null});
   }
 
   function submitReflection(){
@@ -5483,7 +5643,7 @@ function Review(p){
           var done=row.sets.filter(function(s){return s.done;});
           if(done.length===0)return null;
           var vol=done.reduce(function(b,s){return b+(parseFloat(s.w)||0)*(parseInt(s.r)||0);},0);
-          return <div key={i} style={{background:CARD,borderRadius:12,padding:"12px 14px",border:"1px solid "+BORD,marginBottom:8,display:"flex",alignItems:"center",gap:12}}><div style={{flex:1}}><p style={{fontWeight:600,fontSize:14,color:TX}}>{row.name}</p><p style={{fontSize:12,color:MU,marginTop:1}}>{done.length} sets</p></div><p style={{fontSize:13,fontWeight:700,color:OR}}>{useKg?Math.round(vol):Math.round(vol*2.20462)} {unit}</p></div>;
+          return <div key={i} style={{background:CARD,borderRadius:12,padding:"12px 14px",border:"1px solid "+BORD,marginBottom:8,display:"flex",alignItems:"center",gap:12}}><div style={{flex:1}}><p style={{fontWeight:600,fontSize:14,color:TX}}>{row.name}</p><p style={{fontSize:12,color:MU,marginTop:1}}>{done.length} sets</p></div><p style={{fontSize:13,fontWeight:700,color:OR}}>{Math.round(vol)} {unit}</p></div>;
         })}
         <div style={{marginTop:14,marginBottom:18}}>
           <p style={{fontSize:13,fontWeight:600,marginBottom:8,color:TX}}>Quick note</p>
@@ -5732,7 +5892,10 @@ function WorkoutDetail(p){
       });
       return {name:ex.name,sets:sets};
     }).filter(function(ex){return ex.sets.length>0;});
-    var dispVol=useKg?Math.round(totalVol):Math.round(totalVol*2.20462);
+    /* Set weights are stored in the unit they were entered in, so the total is
+     already in the display unit — converting again inflated every lb user's
+     volume by 2.2x. */
+  var dispVol=Math.round(totalVol);
     var updated=Object.assign({},w,{
       name:eName.trim()||w.name,
       note:eNote.trim(),
@@ -5903,7 +6066,7 @@ function WorkoutDetail(p){
 
 
 function ProactiveTipCard(p){
-  var todayISO=new Date().toISOString().slice(0,10);
+  var todayISO=isoDay();
   var cached=ld("proactiveTip",null);
   var [tip,setTip]=useState(cached&&cached.date===todayISO?cached.text:null);
   var [loading,setLoading]=useState(!(cached&&cached.date===todayISO));
@@ -6075,12 +6238,12 @@ function DynamicFeed(p){
   var history=p.history||[];
   var splits=p.splits||[];
   var go=p.go||function(){};
-  var todayISO=new Date().toISOString().slice(0,10);
+  var todayISO=isoDay();
   var feedbacks=ld("feedback",[]);
 
   var todayFb=null;
   for(var fi=0;fi<feedbacks.length;fi++){
-    if(feedbacks[fi].date&&feedbacks[fi].date.slice(0,10)===todayISO){todayFb=feedbacks[fi];break;}
+    if(dayOf(feedbacks[fi].date)===todayISO){todayFb=feedbacks[fi];break;}
   }
 
   var lastW=history.length>0?history[0]:null;
@@ -6092,21 +6255,14 @@ function DynamicFeed(p){
 
   var trainedToday=false;
   for(var ti=0;ti<history.length;ti++){
-    if(history[ti].dateISO&&history[ti].dateISO.slice(0,10)===todayISO){trainedToday=true;break;}
+    if(dayOf(history[ti].dateISO)===todayISO){trainedToday=true;break;}
   }
 
-  var consec=0;
-  var cd=new Date();if(!trainedToday)cd.setDate(cd.getDate()-1);
-  for(var ci=0;ci<10;ci++){
-    var ciso=cd.toISOString().slice(0,10);
-    var foundW=false;
-    for(var cj=0;cj<history.length;cj++){
-      if(history[cj].dateISO&&history[cj].dateISO.slice(0,10)===ciso){foundW=true;break;}
-    }
-    if(foundW){consec++;cd.setDate(cd.getDate()-1);}
-    else break;
+  var trainedDays={};
+  for(var hi2=0;hi2<history.length;hi2++){
+    if(history[hi2].dateISO) trainedDays[dayOf(history[hi2].dateISO)]=true;
   }
-  if(trainedToday) consec++;
+  var consec=dayStreak(function(k){return !!trainedDays[k];});
 
   var nextSplitDay=null;
   if(splits.length>0&&lastW){
@@ -6260,7 +6416,7 @@ var QUICK_ACTION_DEFS={
 
 function quickLogWater(ml){
   var fl=ld("fuelLog",{});
-  var t=new Date().toISOString().slice(0,10);
+  var t=isoDay();
   var d=fl[t]||{meals:{breakfast:[],lunch:[],dinner:[],snacks:[]},water:0};
   d.water=(d.water||0)+ml;
   fl[t]=d;
@@ -6309,7 +6465,7 @@ function HomeScreen(p){
   var [selectedWorkout,setSelectedWorkout]=useState(null);
   var profile=p.profile||{};
   var today=new Date();
-  var todayISO=today.toISOString().slice(0,10);
+  var todayISO=isoDay(today);
   var history=p.history||[];
   var prs=p.prs||{};
   var useKg=p.useKg!==false;
@@ -6318,17 +6474,15 @@ function HomeScreen(p){
   var dateSet={};
   history.forEach(function(w){
     /* Normalize to date-only — some entries (cardio, voice) store full ISO timestamps */
-    var iso=w.dateISO?w.dateISO.slice(0,10):null;
+    var iso=dayOf(w.dateISO);
     if(iso) dateSet[iso]=true;
   });
-  var streak=0;
-  var sd=new Date(today);
-  while(true){var k=sd.toISOString().slice(0,10);if(dateSet[k]){streak++;sd.setDate(sd.getDate()-1);}else break;}
+  var streak=dayStreak(function(k){return !!dateSet[k];});
 
   /* this week */
   var weekStart=new Date(today);weekStart.setDate(today.getDate()-today.getDay());
   var weekISOs={};
-  for(var wd=0;wd<7;wd++){var dd=new Date(weekStart);dd.setDate(weekStart.getDate()+wd);weekISOs[dd.toISOString().slice(0,10)]=true;}
+  for(var wd=0;wd<7;wd++){var dd=new Date(weekStart);dd.setDate(weekStart.getDate()+wd);weekISOs[isoDay(dd)]=true;}
   var weekW=history.filter(function(w){return w.dateISO&&weekISOs[w.dateISO];});
   var uniqueDays={};weekW.forEach(function(w){if(w.dateISO)uniqueDays[w.dateISO]=true;});
   var uDays=Object.keys(uniqueDays).length;
@@ -6352,7 +6506,7 @@ function HomeScreen(p){
   if(showRecap){
     var dayNames2=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
     var missedDays=[];
-    for(var di=0;di<today.getDay();di++){var ddd=new Date(weekStart);ddd.setDate(weekStart.getDate()+di);var ddiso=ddd.toISOString().slice(0,10);if(!uniqueDays[ddiso])missedDays.push(dayNames2[di]);}
+    for(var di=0;di<today.getDay();di++){var ddd=new Date(weekStart);ddd.setDate(weekStart.getDate()+di);var ddiso=isoDay(ddd);if(!uniqueDays[ddiso])missedDays.push(dayNames2[di]);}
     return (
       <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0A0A0B 0%,#1A0A02 100%)",paddingBottom:40}}>
         <div style={{padding:"52px 22px 0"}}>
@@ -6514,7 +6668,7 @@ var GOAL_TYPES=[
 function getBfLog(){return ld("bfLog",[]);}
 function addBfEntry(pct,method){
   var log=getBfLog();
-  log.push({pct:pct,method:method||"manual",date:new Date().toISOString().slice(0,10)});
+  log.push({pct:pct,method:method||"manual",date:isoDay()});
   log.sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});
   sd("bfLog",log);
   return log;
@@ -6552,9 +6706,9 @@ function GoalsTab(p){
   var [bfAiLoading,setBfAiLoading]=useState(false);
 
   function setGoals(fn){setGoalsRaw(function(prev){var n=typeof fn==="function"?fn(prev):fn;sd("goals",n);return n;});}
-  var todayISO=new Date().toISOString().slice(0,10);
+  var todayISO=isoDay();
 
-  function toDisp(kgV){if(!kgV&&kgV!==0)return 0;return useKg?Math.round(kgV*10)/10:Math.round(kgV*2.20462*10)/10;}
+  function toDisp(kgV){if(!kgV&&kgV!==0)return 0;return wNum(kgV,useKg);}
   function toKg(v){return convToKg(v,useKg);}
 
   function getCurrentValue(goal){
@@ -7027,7 +7181,7 @@ function ProgressPage(p){
     return list.reduce(function(b,x){return (!b||x.w>b.w)?x:b;},null);
   }
 
-  function toDisp(kgV){if(!kgV&&kgV!==0) return 0;return useKg?Math.round(kgV*10)/10:Math.round(kgV*2.20462*10)/10;}
+  function toDisp(kgV){if(!kgV&&kgV!==0) return 0;return wNum(kgV,useKg);}
 
   /* Calendar data */
   var calMonth=new Date().getMonth();
@@ -7057,7 +7211,7 @@ function ProgressPage(p){
 
   var photoDates={};
   photos.forEach(function(ph){
-    var d=(ph.date||"").slice(0,10);
+    var d=dayOf(ph.date);
     if(d) photoDates[d]=true;
   });
 
@@ -7237,7 +7391,7 @@ function ProgressPage(p){
                 var hasPR=prDates[k]!==undefined;
                 var hasPhoto=photoDates[k]!==undefined;
                 var hasAny=hasWeight||hasPR||hasPhoto;
-                var isToday=k===new Date().toISOString().slice(0,10);
+                var isToday=k===isoDay();
                 return (
                   <div key={day} style={{aspectRatio:"1",borderRadius:8,background:hasAny?CARD:SU,border:isToday?"1.5px solid #8B5CF6":"1px solid "+(hasAny?BORD:"transparent"),display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",position:"relative"}}>
                     <p style={{fontSize:11,fontWeight:isToday?800:400,color:isToday?"#8B5CF6":hasAny?TX:MU}}>{day}</p>
@@ -7269,7 +7423,7 @@ function ProgressPage(p){
 
 function PRHub(p){
   var useKg=p.useKg!==false; var unit=useKg?"kg":"lb";
-  function toDisp(kgV){if(!kgV&&kgV!==0)return kgV;return useKg?Math.round(kgV*10)/10:Math.round(kgV*2.20462*10)/10;}
+  function toDisp(kgV){if(!kgV&&kgV!==0)return kgV;return wNum(kgV,useKg);}
   function toKg(v){return convToKg(v,useKg);}
   var [sel,setSel]=useState(null);
   var [logging,setLogging]=useState(false);
@@ -7315,7 +7469,7 @@ function PRHub(p){
         </div>
         {logW&&logReps&&(
           <div style={{background:OR_H+"12",borderRadius:10,padding:"12px 15px",border:"1px solid "+OR_H+"30",display:"flex",justifyContent:"space-between"}}>
-            <div><p style={{fontSize:11,color:MU}}>Est. 1RM</p><p style={{fontSize:20,fontWeight:800,fontFamily:"Barlow Condensed,sans-serif",color:OR}}>{Math.round(toKg(parseFloat(logW))*(1+parseInt(logReps)/30)*10)/10} kg</p></div>
+            <div><p style={{fontSize:11,color:MU}}>Est. 1RM</p><p style={{fontSize:20,fontWeight:800,fontFamily:"Barlow Condensed,sans-serif",color:OR}}>{toDisp(toKg(parseFloat(logW))*(1+parseInt(logReps)/30))} {unit}</p></div>
             <div style={{textAlign:"right"}}><p style={{fontSize:11,color:MU}}>Logged as</p><p style={{fontSize:14,fontWeight:700,color:TX}}>{logW} {unit} x {logReps}</p></div>
           </div>
         )}
@@ -7342,19 +7496,20 @@ function PRHub(p){
                     <div style={{width:48,height:48,borderRadius:13,background:OR_H+"18",border:"1px solid "+OR_H+"30",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Barlow Condensed,sans-serif",fontSize:22,fontWeight:800,letterSpacing:"0.03em",color:OR}}>{pr.r}</div>
                     <div><p style={{fontSize:10,color:MU,fontWeight:600,letterSpacing:"0.06em"}}>{pr.r===1?"1 REP MAX":pr.r+" REP MAX"}</p><p style={{fontFamily:"Barlow Condensed,sans-serif",fontSize:26,fontWeight:800,letterSpacing:"0.035em",lineHeight:1,color:TX}}>{toDisp(pr.w)}<span style={{fontSize:13,fontWeight:400,color:MU}}> {unit}</span></p></div>
                   </div>
-                  <div style={{textAlign:"right"}}><p style={{fontSize:10,color:MU}}>Est. 1RM</p><p style={{fontSize:16,fontWeight:800,color:OR,fontFamily:"Barlow Condensed,sans-serif"}}>{Math.round(pr.w*(1+pr.r/30)*10)/10} kg</p><p style={{fontSize:11,color:MU,marginTop:2}}>{pr.date}</p></div>
+                  <div style={{textAlign:"right"}}><p style={{fontSize:10,color:MU}}>Est. 1RM</p><p style={{fontSize:16,fontWeight:800,color:OR,fontFamily:"Barlow Condensed,sans-serif"}}>{toDisp(pr.w*(1+pr.r/30))} {unit}</p><p style={{fontSize:11,color:MU,marginTop:2}}>{pr.date}</p></div>
                 </div>
               </div>
             );
           })}
           {exPrs.length>=2&&(function(){
-            var ests=exPrs.map(function(pr){return {r:pr.r,est:Math.round(pr.w*(1+pr.r/30)*10)/10};});
+            /* Estimates follow the same unit as everything else on this screen. */
+            var ests=exPrs.map(function(pr){return {r:pr.r,est:toDisp(pr.w*(1+pr.r/30))};});
             var maxEst=Math.max.apply(null,ests.map(function(e){return e.est;}));
             var n=ests.length;
             var cW=300;var cH=70;var bW=Math.min(36,Math.floor((cW-20)/n)-6);
             return (
               <div style={{background:CARD,borderRadius:14,padding:"13px 16px",border:"1px solid "+BORD,marginBottom:10}}>
-                <p style={{fontSize:10,color:MU,fontWeight:700,letterSpacing:"0.08em",marginBottom:8}}>STRENGTH PROFILE — EST. 1RM</p>
+                <p style={{fontSize:10,color:MU,fontWeight:700,letterSpacing:"0.08em",marginBottom:8}}>{"STRENGTH PROFILE — EST. 1RM ("+unit.toUpperCase()+")"}</p>
                 <svg width="100%" height={cH+28} viewBox={"0 0 "+cW+" "+(cH+28)} style={{overflow:"visible"}}>
                   {ests.map(function(e,i){
                     var h=Math.max(6,Math.round((e.est/maxEst)*cH));
@@ -7455,7 +7610,7 @@ function PRHub(p){
             var exPrs=prs[eid]||[];
             var best=exPrs.reduce(function(b,x){return (!b||x.w>b.w)?x:b;},null);
             if(!best) return null;
-            var dw=useKg?Math.round(best.w*10)/10:Math.round(best.w*2.20462*10)/10;
+            var dw=wNum(best.w,useKg);
             return <div key={eid} style={{background:CARD,borderRadius:12,padding:"12px 14px",border:"1px solid "+BORD,display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
               <div style={{width:36,height:36,borderRadius:9,background:"#F59E0B18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ic d={D.trophy} z={16} c="#F59E0B"/></div>
               <div style={{flex:1}}><p style={{fontWeight:600,fontSize:14,color:TX}}>{ex.name}</p><p style={{color:MU,fontSize:12,marginTop:1}}>{best.r}RM</p></div>
@@ -7592,7 +7747,7 @@ function ProfileScreen(p){
           <DsSection title="Personal Records">
             <DsCard pad={0}>
               {bestPRs.map(function(pr,i){
-                var dw=useKg?Math.round(pr.w*10)/10:Math.round(pr.w*2.20462*10)/10;
+                var dw=wNum(pr.w,useKg);
                 return (
                   <React.Fragment key={i}>
                     {i>0&&<div style={{height:1,background:SEP,marginLeft:56}}/>}
@@ -8123,7 +8278,7 @@ function SettingsScreen(p){
   var [deleteLoading,setDeleteLoading]=useState(false);
   var [bodyWeight,setBodyWeight]=useState(function(){
     if(!p.profile.weightKg) return "";
-    return String(p.useKg?Math.round(p.profile.weightKg*10)/10:Math.round(p.profile.weightKg*2.20462*10)/10);
+    return String(wNum(p.profile.weightKg,p.useKg));
   });
   useEffect(function(){
     function sync(){setVoiceEnabledState(ld("voiceEnabled",true));}
@@ -9338,7 +9493,7 @@ function getFrequentFoods(fuelLog,days,limit){
   days=days||30;limit=limit||8;
   if(_chipCache.fref===fuelLog&&_chipCache.fout) return _chipCache.fout;
   var cutoff=new Date();cutoff.setDate(cutoff.getDate()-days);
-  var cutISO=cutoff.toISOString().slice(0,10);
+  var cutISO=isoDay(cutoff);
   var counts={},samples={};
   Object.keys(fuelLog||{}).forEach(function(dISO){
     if(dISO<cutISO)return;
@@ -9390,7 +9545,7 @@ function nextSlot(s){
 /* -- TRAINING DAY / WATER GOAL ---------------------------------------- */
 function isTrainingDayToday(history){
   var hist=history||[];
-  var today=new Date().toISOString().slice(0,10);
+  var today=isoDay();
   for(var i=0;i<hist.length;i++){if(hist[i]&&hist[i].dateISO===today)return true;}
   return false;
 }
@@ -9680,13 +9835,13 @@ function TrendsTab(p){
 function FuelTab(p){
   var [tab,setTab]=useState("list");
   var [view,setView]=useState("main"); // "main" | "profile"
-  var todayISO=new Date().toISOString().slice(0,10);
+  var todayISO=isoDay();
   var [fuelLog,setFuelLogRaw]=useState(function(){return ld("fuelLog",{});});
   var [fuelProfile,setFuelProfileRaw]=useState(function(){return ld("fuelProfile",null);});
   var [weightLog,setWeightLog]=useState(function(){return getWeightLog();});
   var [showRefeed,setShowRefeed]=useState(false);
   var [cycleFuelOn,setCycleFuelOn]=useState(function(){return mcFuelAdjustOn();});
-  var [refeedActive,setRefeedActive]=useState(function(){return ld("refeedAccepted",null)===new Date().toISOString().slice(0,10);});
+  var [refeedActive,setRefeedActive]=useState(function(){return ld("refeedAccepted",null)===isoDay();});
   var fs=getFuelSettings(); /* re-read each render; lockedFuelUpdate triggers re-render */
 
   function setFuelLog(fn){setFuelLogRaw(function(prev){var n=typeof fn==="function"?fn(prev):fn;sd("fuelLog",n);return n;});}
@@ -9996,7 +10151,7 @@ function MealPlanFuelTab(p){
     var dn=String(dayName).toLowerCase().slice(0,3);
     for(var i=0;i<7;i++){
       var d=new Date();d.setDate(d.getDate()-i);
-      if(d.toLocaleDateString("en-US",{weekday:"long"}).toLowerCase().slice(0,3)===dn) return d.toISOString().slice(0,10);
+      if(d.toLocaleDateString("en-US",{weekday:"long"}).toLowerCase().slice(0,3)===dn) return isoDay(d);
     }
     return null;
   }
@@ -10129,7 +10284,7 @@ function MealPlanFuelTab(p){
             <span style={{fontSize:11,color:MU}}>{activePlan.name}</span>
           </div>
           {(todayPlanDay.meals||[]).map(function(meal,mi){
-            var mealDone=mealLoggedOn(new Date().toISOString().slice(0,10),meal);
+            var mealDone=mealLoggedOn(isoDay(),meal);
             return (
               <div key={mi} style={{background:SU,borderRadius:10,padding:"10px 12px",marginBottom:6}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -10165,7 +10320,7 @@ function MealPlanFuelTab(p){
             <button onClick={function(){addToShopping(activePlan);}} style={{fontSize:10,color:OR,background:"none",border:"none",fontWeight:700,cursor:"pointer"}}>+ Shopping List ({(activePlan.shoppingList||[]).length})</button>
           </div>
           {(function(){
-            var planned=0,loggedN=0;var todayISO2=new Date().toISOString().slice(0,10);
+            var planned=0,loggedN=0;var todayISO2=isoDay();
             (activePlan.days||[]).forEach(function(day){
               var dISO=dateForPlanDay(day.day);
               (day.meals||[]).forEach(function(meal){
@@ -10358,7 +10513,7 @@ function dailyIntakeSeries(fuelLog,days){
   var out=[];
   for(var i=days-1;i>=0;i--){
     var d=new Date();d.setDate(d.getDate()-i);
-    var iso=d.toISOString().slice(0,10);
+    var iso=isoDay(d);
     var day=(fuelLog||{})[iso];
     var t={date:iso,cal:0,pro:0,carb:0,fat:0,fiber:null,sodium:null,items:0};
     if(day&&day.meals){
@@ -10777,7 +10932,7 @@ function ListTab(p){
     armToast(toast.item,to);
   }
 
-  var yISO=(function(){var d=new Date();d.setDate(d.getDate()-1);return d.toISOString().slice(0,10);})();
+  var yISO=(function(){var d=new Date();d.setDate(d.getDate()-1);return isoDay(d);})();
   var yDay=(p.fuelLog||{})[yISO];
   function yesterdayItems(mk){return (yDay&&yDay.meals&&yDay.meals[mk])||[];}
   function copyYesterdayMeal(mk){
@@ -11784,7 +11939,7 @@ function RecipesTab(p){
   var fp=p.fuelProfile;
   var isTrainingDay=(function(){
     var hist=p.history||[];
-    var today=new Date().toISOString().slice(0,10);
+    var today=isoDay();
     for(var i=0;i<hist.length;i++){if(hist[i].dateISO===today)return true;}
     return false;
   })();
@@ -13763,7 +13918,7 @@ function compForSupp(supp){
 function suppDiaryAdd(supp){
   var comp=compForSupp(supp);
   if(!comp) return false;
-  var today=new Date().toISOString().slice(0,10);
+  var today=isoDay();
   var fl=ld("fuelLog",{});
   var day=fl[today]||{meals:{breakfast:[],lunch:[],dinner:[],snacks:[]},water:0};
   var item={name:supp.name+(supp.dose?" ("+supp.dose+")":""),cal:Math.round(comp.cal||0),pro:Math.round(comp.pro||0),carb:Math.round(comp.carb||0),fat:Math.round(comp.fat||0),src:"supp",suppId:normFoodName(supp.name)};
@@ -13775,7 +13930,7 @@ function suppDiaryAdd(supp){
   return true;
 }
 function suppDiaryRemove(suppName){
-  var today=new Date().toISOString().slice(0,10);
+  var today=isoDay();
   var fl=ld("fuelLog",{});
   var day=fl[today];
   if(!day||!day.meals) return;
@@ -13792,7 +13947,7 @@ function suppDiaryRemove(suppName){
 }
 function markSuppTaken(suppName){
   var log=getSuppLog();
-  var today=new Date().toISOString().slice(0,10);
+  var today=isoDay();
   if(!log[today]) log[today]=[];
   if(log[today].indexOf(suppName)<0) log[today].push(suppName);
   sd("suppLog",log);
@@ -13800,32 +13955,25 @@ function markSuppTaken(suppName){
 }
 function unmarkSuppTaken(suppName){
   var log=getSuppLog();
-  var today=new Date().toISOString().slice(0,10);
+  var today=isoDay();
   if(log[today]) log[today]=log[today].filter(function(n){return n!==suppName;});
   sd("suppLog",log);
   return log;
 }
 function isSuppTaken(suppName,dateISO){
   var log=getSuppLog();
-  if(!dateISO) dateISO=new Date().toISOString().slice(0,10);
+  if(!dateISO) dateISO=isoDay();
   return log[dateISO]&&log[dateISO].indexOf(suppName)>=0;
 }
 function getSuppStreak(suppName){
   var log=getSuppLog();
-  var streak=0;
-  var d=new Date();
-  while(true){
-    var k=d.toISOString().slice(0,10);
-    if(log[k]&&log[k].indexOf(suppName)>=0){streak++;d.setDate(d.getDate()-1);}
-    else break;
-  }
-  return streak;
+  return dayStreak(function(k){return !!(log[k]&&log[k].indexOf(suppName)>=0);});
 }
 function getDueSupps(){
   var supps=ld("supplements",[]);
   var now=new Date();
   var hour=now.getHours();
-  var today=now.toISOString().slice(0,10);
+  var today=isoDay(now);
   var log=getSuppLog();
   var taken=log[today]||[];
   return supps.filter(function(s){
@@ -13898,7 +14046,7 @@ function SupplementsTab(){
   var [customTime,setCustomTime]=useState("");
   var [reminder,setReminder]=useState(false);
   var [q,setQ]=useState("");
-  var todayISO=new Date().toISOString().slice(0,10);
+  var todayISO=isoDay();
 
   function setSupps(fn){setSuppsRaw(function(prev){var n=typeof fn==="function"?fn(prev):fn;sd("supplements",n);return n;});}
 
@@ -13972,7 +14120,7 @@ function SupplementsTab(){
     var last14=[];
     for(var hi=0;hi<14;hi++){
       var hd=new Date();hd.setDate(hd.getDate()-hi);
-      var hk=hd.toISOString().slice(0,10);
+      var hk=isoDay(hd);
       var taken=log[hk]&&log[hk].indexOf(sh.name)>=0;
       last14.push({date:hk,day:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][hd.getDay()],taken:taken});
     }
@@ -14178,7 +14326,7 @@ function saveCycles(c){sd("cycles",c);}
 function getCycleLog(){return ld("cycleLog",{});}
 function markCompoundTaken(cycleName,compoundName){
   var log=getCycleLog();
-  var today=new Date().toISOString().slice(0,10);
+  var today=isoDay();
   var key=cycleName+"::"+compoundName;
   if(!log[today]) log[today]=[];
   if(log[today].indexOf(key)<0) log[today].push(key);
@@ -14187,7 +14335,7 @@ function markCompoundTaken(cycleName,compoundName){
 }
 function isCompoundTaken(cycleName,compoundName,dateISO){
   var log=getCycleLog();
-  if(!dateISO) dateISO=new Date().toISOString().slice(0,10);
+  if(!dateISO) dateISO=isoDay();
   var key=cycleName+"::"+compoundName;
   return log[dateISO]&&log[dateISO].indexOf(key)>=0;
 }
@@ -14197,7 +14345,7 @@ function getCompoundStreak(cycleName,compoundName){
   var streak=0;
   var d=new Date();
   while(true){
-    var k=d.toISOString().slice(0,10);
+    var k=isoDay(d);
     if(log[k]&&log[k].indexOf(key)>=0){streak++;d.setDate(d.getDate()-1);}
     else break;
   }
@@ -14207,7 +14355,7 @@ function getDueCompounds(){
   var perfOn=ld("perfTracking",false);
   if(!perfOn) return [];
   var cycles=getCycles();
-  var today=new Date().toISOString().slice(0,10);
+  var today=isoDay();
   var now=new Date();
   var dayNum=Math.floor(now.getTime()/(1000*60*60*24));
   var log=getCycleLog();
@@ -14280,7 +14428,7 @@ function CycleTab(){
   var [showPresets,setShowPresets]=useState(false);
   var [presetCat,setPresetCat]=useState(null);
   var [presetQ,setPresetQ]=useState("");
-  var todayISO=new Date().toISOString().slice(0,10);
+  var todayISO=isoDay();
 
   /* new cycle form state */
   var [cName,setCName]=useState("");
@@ -14349,7 +14497,7 @@ function CycleTab(){
     if(!cStart||!cWeeks) return "";
     var d=new Date(cStart+"T00:00:00");
     d.setDate(d.getDate()+(parseInt(cWeeks)||12)*7);
-    return d.toISOString().slice(0,10);
+    return isoDay(d);
   }
 
   function saveCycle(){
@@ -14803,7 +14951,7 @@ function CoachScreen(p){
           var topW=0;
           var totalPartials=0;
           (e.sets||[]).forEach(function(s){if((parseFloat(s.w)||0)>topW)topW=parseFloat(s.w)||0;if(s.partials)totalPartials+=parseInt(s.partials)||0;});
-          var tw=p.useKg?Math.round(topW*10)/10:Math.round(topW*2.20462*10)/10;
+          var tw=wNum(topW,p.useKg);
           var detail=exName+"("+setCount+"s,top "+tw+(p.useKg?"kg":"lb");
           if(totalPartials>0)detail+=",+"+totalPartials+"P";
           detail+=")";
@@ -14830,7 +14978,7 @@ function CoachScreen(p){
       var ex=getEx(parseInt(id));
       var best=(prs[id]||[]).reduce(function(b,x){return (!b||x.w>b.w)?x:b;},null);
       if(!best) return "";
-      var w=p.useKg?Math.round(best.w*10)/10:Math.round(best.w*2.20462*10)/10;
+      var w=wNum(best.w,p.useKg);
       return ex.name+": "+w+(p.useKg?"kg":"lb")+" x "+best.r;
     }).filter(Boolean).join(", ");
 
@@ -14856,7 +15004,7 @@ function CoachScreen(p){
     }
 
     /* Today's food intake */
-    var todayISO=new Date().toISOString().slice(0,10);
+    var todayISO=isoDay();
     var fuelLog=ld("fuelLog",{});
     var todayFood=fuelLog[todayISO];
     var foodCtx="";
@@ -14879,7 +15027,7 @@ function CoachScreen(p){
     if(weightLog.length>0){
       var recent=weightLog.slice(-7);
       var wts=recent.map(function(e){
-        var v=p.useKg?Math.round(e.kg*10)/10:Math.round(e.kg*2.20462*10)/10;
+        var v=wNum(e.kg,p.useKg);
         return e.date+": "+v+(p.useKg?"kg":"lb");
       }).join(", ");
       weightCtx=" Weight log (last "+recent.length+"): "+wts+".";
@@ -14887,7 +15035,7 @@ function CoachScreen(p){
         var first=weightLog[Math.max(0,weightLog.length-7)].kg;
         var last=weightLog[weightLog.length-1].kg;
         var diff=last-first;
-        var dv=p.useKg?Math.round(diff*10)/10:Math.round(diff*2.20462*10)/10;
+        var dv=wNum(diff,p.useKg);
         weightCtx+=" 7-day trend: "+(dv>0?"+":"")+dv+(p.useKg?"kg":"lb")+".";
       }
     }
@@ -14956,7 +15104,7 @@ function CoachScreen(p){
     var bodyStats="";
     if(profile.age) bodyStats+=" Age: "+profile.age+".";
     if(profile.sex) bodyStats+=" Sex: "+profile.sex+".";
-    if(profile.weightKg) bodyStats+=" Weight: "+(p.useKg?Math.round(profile.weightKg*10)/10:Math.round(profile.weightKg*2.20462*10)/10)+(p.useKg?"kg":"lbs")+".";
+    if(profile.weightKg) bodyStats+=" Weight: "+(wNum(profile.weightKg,p.useKg))+(p.useKg?"kg":"lbs")+".";
     if(profile.heightCm) bodyStats+=" Height: "+(p.useKg?Math.round(profile.heightCm)+"cm":(Math.floor(profile.heightCm/30.48)+"ft "+Math.round((profile.heightCm/2.54)%12)+"in"))+".";
     if(profile.goal) bodyStats+=" Goal: "+profile.goal+".";
     /* Weekly food average */
@@ -14966,7 +15114,7 @@ function CoachScreen(p){
       var w7cals=[],w7pro=[],w7carb=[],w7fat=[];
       for(var di=1;di<=7;di++){
         var d7=new Date();d7.setDate(d7.getDate()-di);
-        var dISO7=d7.toISOString().slice(0,10);
+        var dISO7=isoDay(d7);
         var dayLog=fuelLog7[dISO7];
         if(dayLog&&dayLog.meals){
           var dItems=[];
@@ -15198,11 +15346,11 @@ function CoachScreen(p){
       var list=(p.prs||{})[goalData.exId];
       if(list&&list.length>0){
         var best=list.reduce(function(b,x){return (!b||x.w>b.w)?x:b;},null);
-        curVal=best?(useKg2?Math.round(best.w*10)/10:Math.round(best.w*2.20462*10)/10):0;
+        curVal=best?(wNum(best.w,useKg2)):0;
       }
     } else if(goalData.type==="weight"){
       var wl=getWeightLog();
-      if(wl.length>0) curVal=useKg2?Math.round(wl[wl.length-1].kg*10)/10:Math.round(wl[wl.length-1].kg*2.20462*10)/10;
+      if(wl.length>0) curVal=wNum(wl[wl.length-1].kg,useKg2);
     } else if(goalData.type==="bf"){
       var bfl=getBfLog();
       if(bfl.length>0) curVal=bfl[bfl.length-1].pct;
@@ -15243,7 +15391,7 @@ function CoachScreen(p){
 
   function saveCoachFood(foodData){
     if(!foodData||!foodData.items||foodData.items.length===0) return;
-    var todayISO2=new Date().toISOString().slice(0,10);
+    var todayISO2=isoDay();
     var fuelLog=ld("fuelLog",{});
     var today=fuelLog[todayISO2]||{meals:{breakfast:[],lunch:[],dinner:[],snacks:[]},water:0};
     var meal=foodData.meal||"snacks";
@@ -15270,7 +15418,7 @@ function CoachScreen(p){
     var entry={
       name:planData.name||"My Plan",
       description:planData.description||"",
-      startDate:planData.startDate||new Date().toISOString().slice(0,10),
+      startDate:planData.startDate||isoDay(),
       phases:planData.phases||[],
       created:new Date().toISOString(),
       updatedAt:new Date().toISOString()
@@ -15333,7 +15481,7 @@ function CoachScreen(p){
       if(prList&&prList.length>0){
         var best=prList.reduce(function(b,x){return (!b||x.w>b.w)?x:b;},null);
         if(best){
-          var curW=parsed.isLbs?Math.round(best.w*2.20462*10)/10:(parsed.isKg?Math.round(best.w*10)/10:(useKg2?Math.round(best.w*10)/10:Math.round(best.w*2.20462*10)/10));
+          var curW=parsed.isLbs?Math.round(best.w*2.20462*10)/10:(parsed.isKg?Math.round(best.w*10)/10:(wNum(best.w,useKg2)));
           return {type:"lift",current:curW,target:parsed.num,exName:getEx(matchedExId).name};
         }
       }
@@ -15345,7 +15493,7 @@ function CoachScreen(p){
       var wl=getWeightLog();
       if(wl.length>0){
         var lastW=wl[wl.length-1].kg;
-        var curBw=parsed.isLbs?Math.round(lastW*2.20462*10)/10:(parsed.isKg?Math.round(lastW*10)/10:(useKg2?Math.round(lastW*10)/10:Math.round(lastW*2.20462*10)/10));
+        var curBw=parsed.isLbs?Math.round(lastW*2.20462*10)/10:(parsed.isKg?Math.round(lastW*10)/10:(wNum(lastW,useKg2)));
         return {type:"weight",current:curBw,target:parsed.num};
       }
       return {type:"weight",current:0,target:parsed.num};
@@ -15367,7 +15515,7 @@ function CoachScreen(p){
         var gCur=0;
         if(goals2[gi].type==="lift"&&goals2[gi].exId){
           var gPrs=prs2[goals2[gi].exId];
-          if(gPrs&&gPrs.length>0){var gBest=gPrs.reduce(function(b,x){return(!b||x.w>b.w)?x:b;},null);if(gBest) gCur=useKg2?Math.round(gBest.w*10)/10:Math.round(gBest.w*2.20462*10)/10;}
+          if(gPrs&&gPrs.length>0){var gBest=gPrs.reduce(function(b,x){return(!b||x.w>b.w)?x:b;},null);if(gBest) gCur=wNum(gBest.w,useKg2);}
         }
         return {type:"goal",current:gCur,target:parsed.num};
       }
@@ -15949,11 +16097,11 @@ function FeedbackScreen(p){
     );
   }
 
-  var todayISO=new Date().toISOString().slice(0,10);
-  var loggedToday=entries.some(function(e){return e.date&&e.date.slice(0,10)===todayISO;});
+  var todayISO=isoDay();
+  var loggedToday=entries.some(function(e){return dayOf(e.date)===todayISO;});
   var thisWeekStart=new Date();thisWeekStart.setDate(thisWeekStart.getDate()-thisWeekStart.getDay());
-  var weekISO=thisWeekStart.toISOString().slice(0,10);
-  var loggedThisWeek=entries.some(function(e){return e.date&&e.date.slice(0,10)>=weekISO;});
+  var weekISO=isoDay(thisWeekStart);
+  var loggedThisWeek=entries.some(function(e){return (dayOf(e.date)||"")>=weekISO;});
 
   return (
     <div style={{paddingBottom:100}}>
@@ -16234,7 +16382,7 @@ function WeightLogCard(p){
   var [showLog,setShowLog]=useState(false);
   var weightLog=p.weightLog||[];
   var useKg=p.useKg;
-  var todayISO=new Date().toISOString().slice(0,10);
+  var todayISO=isoDay();
   var loggedToday=weightLog.some(function(e){return e.date===todayISO;});
 
   function submit(){
@@ -16259,7 +16407,7 @@ function WeightLogCard(p){
         if(trendArr.length<2) return null;
         var lastT=trendArr[trendArr.length-1];
         var rate=weeklyRatePct(trendArr);
-        var conv=function(kg){return useKg?Math.round(kg*10)/10:Math.round(kg*2.20462*10)/10;};
+        var conv=function(kg){return wNum(kg,useKg);};
         var targetRate=p.fuelProfile&&p.fuelProfile.ratePct>0?(p.fuelProfile.goal==="cut"?-p.fuelProfile.ratePct:p.fuelProfile.goal==="bulk"?p.fuelProfile.ratePct:null):null;
         var onPace=rate&&targetRate!=null&&Math.abs(rate.pct-targetRate)<=Math.abs(targetRate)*0.2;
         return (
@@ -16273,7 +16421,7 @@ function WeightLogCard(p){
         );
       })()}
       {loggedToday?(
-        <p style={{fontSize:12,color:GR}}>Logged today: {useKg?Math.round(weightLog[weightLog.length-1].kg*10)/10:Math.round(weightLog[weightLog.length-1].kg*2.20462*10)/10} {useKg?"kg":"lbs"}</p>
+        <p style={{fontSize:12,color:GR}}>Logged today: {wNum(weightLog[weightLog.length-1].kg,useKg)} {useKg?"kg":"lbs"}</p>
       ):(
         <div style={{display:"flex",gap:8}}>
           <input value={val} onChange={function(e){setVal(e.target.value);}} type="number" placeholder={useKg?"kg":"lbs"} style={{flex:1,background:SU,border:"1px solid "+BORD,borderRadius:9,padding:"9px 12px",color:TX,fontSize:14,outline:"none"}}/>
@@ -16283,7 +16431,7 @@ function WeightLogCard(p){
       {showLog&&weightLog.length>0&&(
         <div style={{marginTop:10,maxHeight:150,overflowY:"auto"}}>
           {weightLog.slice().reverse().slice(0,14).map(function(e,i){
-            var display=useKg?Math.round(e.kg*10)/10:Math.round(e.kg*2.20462*10)/10;
+            var display=wNum(e.kg,useKg);
             return <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid "+SU}}><p style={{fontSize:12,color:MU}}>{e.date}</p><p style={{fontSize:12,fontWeight:600,color:TX}}>{display} {useKg?"kg":"lbs"}</p></div>;
           })}
         </div>
@@ -16313,7 +16461,7 @@ function showVoiceToast(msg){
 }
 function executeVoiceAction(r){
   var a=r.action,d=r.data||{};
-  var today=new Date().toISOString().slice(0,10);
+  var today=isoDay();
   if(a==="add_shopping"){
     (d.items||[]).forEach(function(item){var p2=parseIngredient((item.quantity&&item.quantity!==1?item.quantity+" ":"")+item.name);addShoppingItem(p2.name,p2.quantity,item.unit&&item.unit!=="qty"?item.unit:p2.unit);});
     showVoiceToast("Added "+(d.items||[]).length+" item(s) to shopping list");
@@ -16368,7 +16516,7 @@ function executeVoiceAction(r){
   if(a==="log_workout"){
     var wh=ld("workoutHistory",[]);
     var now2=new Date();
-    wh.unshift({name:d.name||"Voice Workout",date:now2.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}),dateISO:now2.toISOString().slice(0,10),sets:d.sets||0,vol:d.volume||0,exercises:d.name||"",fromVoice:true});
+    wh.unshift({name:d.name||"Voice Workout",date:now2.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}),dateISO:isoDay(now2),sets:d.sets||0,vol:d.volume||0,exercises:d.name||"",fromVoice:true});
     sd("workoutHistory",wh);
     showVoiceToast("Workout logged: "+(d.name||"Workout"));
     return;
@@ -18442,7 +18590,7 @@ function CardioLog(p){
         type:"cardio",
         name:type.name,
         date:new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"}),
-        dateISO:new Date().toISOString().slice(0,10),
+        dateISO:isoDay(),
         dur:Math.round(parseFloat(duration))+" min",
         sets:1,
         vol:Math.round(cal)+" cal",
@@ -18563,7 +18711,7 @@ function CardioLog(p){
 
 function App(){
   var [profile,setProfileRaw]=useState(function(){return ld("profile",null);});
-  var [useKg,setUseKgRaw]=useState(function(){var pr=ld("profile",null);return pr?pr.useKg!==false:true;});
+  var [useKg,setUseKgRaw]=useState(function(){return resolveUseKg(ld("profile",null));});
   var [splits,setSplitsRaw]=useState(function(){return ld("splits",[]);});
   var [prs,setPrsRaw]=useState(function(){return ld("prs",{});});
   var [history,setHistoryRaw]=useState(function(){return ld("history",[]);});
@@ -18578,6 +18726,12 @@ function App(){
   var [showResumeDialog,setShowResumeDialog]=useState(false);
   var [showTutorial,setShowTutorial]=useState(function(){return !ld("tutorialSeen",false);});
   var [coachInitialTab,setCoachInitialTab]=useState(null); /* set when a check-in notification opens the app */
+  var [restInfo,setRestInfo]=useState({active:false,remaining:0}); /* rest countdown, mirrored from the workout screen */
+  useEffect(function(){
+    function onRest(e){setRestInfo(e.detail||{active:false,remaining:0});}
+    window.addEventListener("lockedRest",onRest);
+    return function(){window.removeEventListener("lockedRest",onRest);};
+  },[]);
 
   /* Auto-sync profile from Supabase if missing but user is authenticated */
   useEffect(function(){
@@ -18589,15 +18743,22 @@ function App(){
         var meta=user.user_metadata||{};
         window.LOCKED._client.from("profiles").select("*").eq("user_id",user.id).single().then(function(r){
           if(!r||!r.data) return;
-          var syncedProfile={
-            displayName:r.data.display_name||r.data.displayName||meta.displayName||"Athlete",
-            username:r.data.username||meta.username||(user.email?user.email.split("@")[0]:"user"),
-            useKg:r.data.use_kg!==false,
-            createdAt:r.data.created_at||new Date().toLocaleDateString()
-          };
+          /* Backfill only — this runs when the name or username is missing, so
+             it must merge onto whatever profile already exists. Replacing it
+             wholesale used to discard age, sex, body weight, height and goal,
+             and reset the unit to kg for anyone whose row had no use_kg. */
+          var existing=ld("profile",null)||{};
+          var syncedProfile=Object.assign({},existing,{
+            displayName:existing.displayName||r.data.display_name||r.data.displayName||meta.displayName||"Athlete",
+            username:existing.username||r.data.username||meta.username||(user.email?user.email.split("@")[0]:"user"),
+            createdAt:existing.createdAt||r.data.created_at||new Date().toLocaleDateString()
+          });
+          var resolvedUnit=resolveUseKg(
+            typeof existing.useKg==="boolean"?existing:{useKg:r.data.use_kg!==false});
+          syncedProfile.useKg=resolvedUnit;
           sd("profile",syncedProfile);
           setProfileRaw(syncedProfile);
-          setUseKgRaw(syncedProfile.useKg);
+          setUseKgRaw(resolvedUnit);
         }).catch(function(){});
       }).catch(function(){});
     }catch(e){}
@@ -18646,6 +18807,7 @@ function App(){
   function toggleUnit(){
     setUseKgRaw(function(prev){
       var next=!prev;
+      setUnitPin(next);
       setProfileRaw(function(pr){var np=Object.assign({},pr,{useKg:next});sd("profile",np);return np;});
       return next;
     });
@@ -18655,7 +18817,7 @@ function App(){
   }
   function completeOnboarding(data,prog){
     var pr={displayName:data.displayName,username:data.username,useKg:data.useKg,createdAt:new Date().toLocaleDateString()};
-    sd("profile",pr);setProfileRaw(pr);setUseKgRaw(pr.useKg);
+    sd("profile",pr);setUnitPin(pr.useKg);setProfileRaw(pr);setUseKgRaw(pr.useKg);
     if(prog&&prog.splits){
       // Check if the AI returned splits-with-days format (PPL = 3 splits, each with days)
       // or days-as-splits format (each day is its own split) - we want one split with all days
@@ -18811,7 +18973,9 @@ function App(){
               <div style={{width:8,height:8,borderRadius:"50%",background:"#fff",animation:"pulse 2s infinite"}}/>
               <p style={{color:"#fff",fontSize:13,fontWeight:700}}>{workout.name||"Workout"} in progress</p>
             </div>
-            <p style={{color:"rgba(255,255,255,0.8)",fontSize:12,fontWeight:600}}>TAP TO RETURN</p>
+            {restInfo.active
+              ? <p style={{color:"#fff",fontSize:12,fontWeight:800,letterSpacing:"0.04em"}}>REST {Math.floor(restInfo.remaining/60)}:{("0"+(restInfo.remaining%60)).slice(-2)}</p>
+              : <p style={{color:"rgba(255,255,255,0.8)",fontSize:12,fontWeight:600}}>TAP TO RETURN</p>}
           </div>
         )}
         {/* Persistent WorkoutLog - stays mounted, shown/hidden via CSS */}
