@@ -1167,6 +1167,424 @@
   }
 })();
   </script>
+  <script>
+/**
+ * LOCKED Push Notifications v1.0
+ *
+ * Three notifications, all delivered by the Cloudflare Worker so they arrive
+ * with the app closed and the phone locked — which is the only way any of
+ * this is useful, and the only thing that works at all on iOS:
+ *
+ *   - Rest timer finished. Scheduled server-side the moment a rest starts,
+ *     fired by a Durable Object alarm at the exact second.
+ *   - Daily training reminder — "It's Push day".
+ *   - Daily check-in nudge, skipped automatically once the day is logged.
+ *
+ * The daily two are sent by a cron job that reads a small context snapshot
+ * kept on the subscription (next split day, streak, whether today is already
+ * trained or checked in). Keeping that snapshot server-side means reminders
+ * work for guest accounts too, without cloud sync.
+ *
+ * iOS note: web push only exists in an installed PWA (Add to Home Screen),
+ * so `status().needsInstall` is true in mobile Safari and the UI says so
+ * rather than offering a switch that cannot work.
+ */
+(function () {
+  "use strict";
+
+  var API = "/api";
+  var DEVICE_KEY = "lk_pushDeviceId";
+  var PREFS_KEY = "lk_pushPrefs";
+  var ENABLED_KEY = "lk_pushEnabled";
+
+  var DEFAULT_PREFS = {
+    rest: true,
+    training: true,
+    trainingTime: "07:30",
+    checkin: true,
+    checkinTime: "08:00"
+  };
+
+  /* ---- small storage helpers (the app's own keys are all "lk_"-prefixed) ---- */
+
+  function readRaw(key, fallback) {
+    try {
+      var v = window.localStorage.getItem(key);
+      return v == null ? fallback : JSON.parse(v);
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function writeRaw(key, value) {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {}
+  }
+
+  /* Stable per-device id. Notifications are a property of this phone, not of
+     the account, so it is deliberately not part of cloud sync. */
+  function deviceId() {
+    var id = null;
+    try {
+      id = window.localStorage.getItem(DEVICE_KEY);
+    } catch (e) {}
+    if (!id) {
+      if (window.crypto && window.crypto.randomUUID) {
+        id = window.crypto.randomUUID().replace(/-/g, "");
+      } else {
+        var rnd = window.crypto && window.crypto.getRandomValues
+          ? window.crypto.getRandomValues(new Uint8Array(16))
+          : null;
+        id = rnd
+          ? Array.prototype.map.call(rnd, function (b) { return ("0" + b.toString(16)).slice(-2); }).join("")
+          : "d" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      }
+      try { window.localStorage.setItem(DEVICE_KEY, id); } catch (e) {}
+    }
+    return id;
+  }
+
+  function getPrefs() {
+    var stored = readRaw(PREFS_KEY, null);
+    return Object.assign({}, DEFAULT_PREFS, stored || {});
+  }
+
+  function timeZone() {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    } catch (e) {
+      return "UTC";
+    }
+  }
+
+  function todayISO() {
+    var d = new Date();
+    return d.getFullYear() + "-" +
+      ("0" + (d.getMonth() + 1)).slice(-2) + "-" +
+      ("0" + d.getDate()).slice(-2);
+  }
+
+  /* ---- capability detection ---- */
+
+  function isIOS() {
+    var ua = navigator.userAgent || "";
+    return /iPad|iPhone|iPod/.test(ua) ||
+      (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  }
+
+  function isStandalone() {
+    return window.navigator.standalone === true ||
+      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  }
+
+  function supported() {
+    return "serviceWorker" in navigator &&
+      "PushManager" in window &&
+      "Notification" in window;
+  }
+
+  /* ---- the daily-reminder context snapshot ----
+     Mirrors the Home feed's "what's next" logic so the notification and the
+     app never disagree about which day is up. */
+
+  function buildContext() {
+    var profile = readRaw("lk_profile", {}) || {};
+    var splits = readRaw("lk_splits", []) || [];
+    var history = readRaw("lk_history", []) || [];
+    var feedback = readRaw("lk_feedback", []) || [];
+    var today = todayISO();
+
+    var lastW = history.length > 0 ? history[0] : null;
+
+    /* Next day in the split: the one after whatever was trained last. */
+    var nextDay = null;
+    if (splits.length > 0) {
+      if (lastW && lastW.name) {
+        for (var si = 0; si < splits.length && !nextDay; si++) {
+          var days = splits[si].days || [];
+          for (var di = 0; di < days.length; di++) {
+            if (days[di].name === lastW.name) {
+              nextDay = days[(di + 1) % days.length];
+              break;
+            }
+          }
+        }
+      }
+      if (!nextDay && splits[0].days && splits[0].days.length > 0) nextDay = splits[0].days[0];
+    }
+
+    var trainedTodayISO = null;
+    for (var hi = 0; hi < history.length; hi++) {
+      if (history[hi].dateISO && history[hi].dateISO.slice(0, 10) === today) {
+        trainedTodayISO = today;
+        break;
+      }
+    }
+
+    /* Consecutive training days, counting back from today (or yesterday if
+       today has not been trained yet). */
+    var streak = 0;
+    var cursor = new Date();
+    if (!trainedTodayISO) cursor.setDate(cursor.getDate() - 1);
+    for (var step = 0; step < 30; step++) {
+      var iso = cursor.getFullYear() + "-" +
+        ("0" + (cursor.getMonth() + 1)).slice(-2) + "-" +
+        ("0" + cursor.getDate()).slice(-2);
+      var found = false;
+      for (var wj = 0; wj < history.length; wj++) {
+        if (history[wj].dateISO && history[wj].dateISO.slice(0, 10) === iso) { found = true; break; }
+      }
+      if (!found) break;
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+
+    var checkinISO = null;
+    for (var fi = 0; fi < feedback.length; fi++) {
+      if (feedback[fi].date && feedback[fi].date.slice(0, 10) === today) { checkinISO = today; break; }
+    }
+
+    return {
+      name: profile.displayName || null,
+      nextDay: nextDay ? nextDay.name : null,
+      exerciseCount: nextDay && nextDay.exIds ? nextDay.exIds.length : 0,
+      streak: streak,
+      trainedTodayISO: trainedTodayISO,
+      checkinISO: checkinISO
+    };
+  }
+
+  /* ---- Worker calls ---- */
+
+  function post(path, body) {
+    return fetch(API + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+  }
+
+  function b64uToUint8(base64) {
+    var padded = (base64 + "=".repeat((4 - base64.length % 4) % 4))
+      .replace(/-/g, "+").replace(/_/g, "/");
+    var raw = window.atob(padded);
+    var out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  var _enabling = null;
+
+  /* Ask for permission and register with the Worker. Must be called from a
+     user gesture — iOS ignores permission prompts that are not. */
+  async function enable() {
+    if (_enabling) return _enabling;
+    _enabling = (async function () {
+      if (!supported()) {
+        throw new Error(isIOS() && !isStandalone()
+          ? "On iPhone, add LOCKED to your Home Screen first — Share → Add to Home Screen — then turn notifications on from the installed app."
+          : "This browser doesn't support notifications.");
+      }
+
+      var permission = Notification.permission;
+      if (permission === "default") permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        throw new Error(permission === "denied"
+          ? "Notifications are blocked for this site. Turn them back on in your browser or phone settings, then try again."
+          : "Notification permission was not granted.");
+      }
+
+      var reg = await navigator.serviceWorker.ready;
+
+      var keyRes = await fetch(API + "/push/key");
+      if (!keyRes.ok) throw new Error("Couldn't reach the notification service.");
+      var publicKey = (await keyRes.json()).publicKey;
+      if (!publicKey) throw new Error("Notification service is not configured.");
+
+      /* An existing subscription made with a different application key can
+         never be delivered to — drop it and make a fresh one. */
+      var sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        var existingKey = sub.options && sub.options.applicationServerKey;
+        var matches = false;
+        if (existingKey) {
+          var a = new Uint8Array(existingKey);
+          var b = b64uToUint8(publicKey);
+          matches = a.length === b.length;
+          for (var i = 0; matches && i < a.length; i++) if (a[i] !== b[i]) matches = false;
+        }
+        if (!matches) {
+          await sub.unsubscribe().catch(function () {});
+          sub = null;
+        }
+      }
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: b64uToUint8(publicKey)
+        });
+      }
+
+      var res = await post("/push/subscribe", {
+        deviceId: deviceId(),
+        subscription: sub.toJSON(),
+        tz: timeZone(),
+        prefs: getPrefs(),
+        ctx: buildContext()
+      });
+      if (!res.ok) {
+        var err = await res.json().catch(function () { return {}; });
+        throw new Error(err.error || "Couldn't register for notifications.");
+      }
+
+      writeRaw(ENABLED_KEY, true);
+      return true;
+    })();
+
+    try {
+      return await _enabling;
+    } finally {
+      _enabling = null;
+    }
+  }
+
+  async function disable() {
+    writeRaw(ENABLED_KEY, false);
+    try {
+      var reg = await navigator.serviceWorker.ready;
+      var sub = await reg.pushManager.getSubscription();
+      if (sub) await sub.unsubscribe().catch(function () {});
+    } catch (e) {}
+    await post("/push/unsubscribe", { deviceId: deviceId() }).catch(function () {});
+    return true;
+  }
+
+  function isEnabled() {
+    return readRaw(ENABLED_KEY, false) === true &&
+      "Notification" in window && Notification.permission === "granted";
+  }
+
+  /* Update preferences locally and on the Worker. Returns once the Worker has
+     the change, so a failed save can be surfaced instead of silently lost. */
+  async function setPrefs(partial) {
+    var next = Object.assign(getPrefs(), partial || {});
+    writeRaw(PREFS_KEY, next);
+    if (!isEnabled()) return next;
+    var res = await post("/push/prefs", {
+      deviceId: deviceId(),
+      tz: timeZone(),
+      prefs: next,
+      ctx: buildContext()
+    });
+    if (res.status === 404) {
+      /* The Worker lost the record (KV expiry, new device id) — re-register. */
+      await enable().catch(function () {});
+    }
+    return next;
+  }
+
+  var _lastRefresh = 0;
+
+  /* Push the current training/check-in snapshot to the Worker so tomorrow's
+     reminder is accurate. Cheap, and throttled to once a minute. */
+  async function refresh(force) {
+    if (!isEnabled()) return;
+    if (!force && Date.now() - _lastRefresh < 60000) return;
+    _lastRefresh = Date.now();
+    try {
+      var res = await post("/push/prefs", {
+        deviceId: deviceId(),
+        tz: timeZone(),
+        prefs: getPrefs(),
+        ctx: buildContext()
+      });
+      if (res.status === 404) await enable().catch(function () {});
+    } catch (e) {}
+  }
+
+  async function test() {
+    if (!isEnabled()) throw new Error("Turn notifications on first.");
+    var res = await post("/push/test", { deviceId: deviceId() });
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok || !data.ok) throw new Error(data.error || "The push service rejected the test. Try turning notifications off and on again.");
+    return true;
+  }
+
+  /* ---- rest timer ---- */
+
+  function scheduleRest(seconds, exerciseName) {
+    if (!isEnabled() || !getPrefs().rest) return Promise.resolve(false);
+    return post("/push/rest", {
+      deviceId: deviceId(),
+      seconds: Math.round(seconds),
+      exercise: exerciseName || null
+    }).then(function (res) { return res.ok; }).catch(function () { return false; });
+  }
+
+  function cancelRest() {
+    if (!isEnabled()) return Promise.resolve(false);
+    return post("/push/rest/cancel", { deviceId: deviceId() })
+      .then(function (res) { return res.ok; }).catch(function () { return false; });
+  }
+
+  function status() {
+    return {
+      supported: supported(),
+      needsInstall: isIOS() && !isStandalone() && !supported(),
+      permission: "Notification" in window ? Notification.permission : "unsupported",
+      enabled: isEnabled(),
+      prefs: getPrefs()
+    };
+  }
+
+  /* ---- service worker messages ---- */
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", function (e) {
+      var msg = e.data || {};
+      if (msg.source !== "locked-push") return;
+      if (msg.type === "resubscribe") {
+        /* The browser rotated our subscription — quietly re-register. */
+        enable().catch(function () {});
+        return;
+      }
+      /* A tapped notification on an already-open app: let React route. */
+      window.dispatchEvent(new CustomEvent("lockedPushOpen", { detail: msg }));
+    });
+  }
+
+  /* Keep the reminder context fresh whenever the app comes back to the
+     foreground, so "It's Push day" reflects last night's workout. */
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") refresh(false);
+  });
+
+  window.LOCKEDPush = {
+    enable: enable,
+    disable: disable,
+    isEnabled: isEnabled,
+    status: status,
+    getPrefs: getPrefs,
+    setPrefs: setPrefs,
+    refresh: refresh,
+    test: test,
+    scheduleRest: scheduleRest,
+    cancelRest: cancelRest,
+    buildContext: buildContext,
+    deviceId: deviceId
+  };
+  if (window.LOCKED) window.LOCKED.push = window.LOCKEDPush;
+
+  /* On boot: re-register if permission is granted but the Worker record has
+     aged out, and refresh the snapshot. */
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.ready.then(function () {
+      if (isEnabled()) refresh(true);
+    }).catch(function () {});
+  }
+})();
+  </script>
   <style>
     html,body{margin:0;padding:0;background:#080809;min-height:100vh;}
     *{-webkit-tap-highlight-color:transparent;}
@@ -3522,6 +3940,7 @@ function WorkoutLog(p){
   var [showTools,setShowTools]=useState(false);
   var restRef=useRef(null);
   var restStartRef=useRef(null);
+  var restExerciseRef=useRef(null); /* last exercise logged — names the rest notification */
   var startTimeRef=useRef(null);
   var secRef=useRef(0); /* always-current sec for inactivity handler without adding sec to effect deps */
   var [lastActivityTime,setLastActivityTime]=useState(Date.now());
@@ -3595,13 +4014,26 @@ function WorkoutLog(p){
     return function(){if(restRef.current){clearInterval(restRef.current);restRef.current=null;}};
   },[restActive,restTarget]); /* restSec intentionally excluded — adding it recreates the interval every tick */
 
-  function startRest(secs){
+  /* Hand the rest timer to the server as well as running it locally.
+     Once the phone locks, the in-page interval below is frozen — the push
+     scheduled here is what actually reaches you between sets. */
+  function pushRest(secs,exName){
+    if(!window.LOCKEDPush)return;
+    if(exName)restExerciseRef.current=exName;
+    window.LOCKEDPush.scheduleRest(secs,exName||restExerciseRef.current);
+  }
+  function cancelPushRest(){
+    if(window.LOCKEDPush)window.LOCKEDPush.cancelRest();
+  }
+
+  function startRest(secs,exName){
     sd("activeWorkoutRestTarget",secs);
     setRestTarget(secs);
     setRestSec(secs);
     restStartRef.current=Date.now();
     setRestActive(false);
     setTimeout(function(){setRestActive(true);},50);
+    pushRest(secs,exName);
   }
 
   /* Recalculate rest timer when app returns from background */
@@ -3684,7 +4116,7 @@ function WorkoutLog(p){
       }
       return next;
     });
-    if(restEnabled) startRest(restTarget);
+    if(restEnabled) startRest(restTarget,rows[ri]&&rows[ri].name);
   }
   function removeSet(ri,si){setRows(function(prev){return prev.map(function(row,i){if(i!==ri)return row;return Object.assign({},row,{sets:row.sets.filter(function(_,j){return j!==si;})});});});}
   function removeRow(ri){setRows(function(prev){return prev.filter(function(_,i){return i!==ri;});});}
@@ -3958,7 +4390,7 @@ function WorkoutLog(p){
                 </div>
               )}
             </div>
-            <button onClick={function(){setRestActive(false);setRestSec(0);setRestCustom(false);}} style={{padding:"8px 12px",borderRadius:8,border:"1px solid "+BORD,background:"transparent",color:MU,fontSize:12,fontWeight:600,cursor:"pointer",flexShrink:0}}>Done</button>
+            <button onClick={function(){setRestActive(false);setRestSec(0);setRestCustom(false);cancelPushRest();}} style={{padding:"8px 12px",borderRadius:8,border:"1px solid "+BORD,background:"transparent",color:MU,fontSize:12,fontWeight:600,cursor:"pointer",flexShrink:0}}>Done</button>
           </div>
         </div>
       )}
@@ -3992,8 +4424,8 @@ function WorkoutLog(p){
                 </div>
               )}
             </div>
-            <button onClick={function(){if(window.confirm("Discard this workout? All progress will be lost."))p.onDiscard();}} style={{padding:"10px 14px",borderRadius:10,border:"1px solid "+RE_H+"40",background:RE_H+"12",color:RE,fontFamily:"Barlow Condensed,sans-serif",fontSize:14,fontWeight:700,cursor:"pointer"}}>DISCARD</button>
-            <button onClick={function(){p.onFinish(rows,sec);}} style={{padding:"10px 18px",borderRadius:10,border:"none",background:OR,color:"#fff",fontFamily:"Barlow Condensed,sans-serif",fontSize:16,fontWeight:700,cursor:"pointer"}}>FINISH</button>
+            <button onClick={function(){if(window.confirm("Discard this workout? All progress will be lost.")){cancelPushRest();p.onDiscard();}}} style={{padding:"10px 14px",borderRadius:10,border:"1px solid "+RE_H+"40",background:RE_H+"12",color:RE,fontFamily:"Barlow Condensed,sans-serif",fontSize:14,fontWeight:700,cursor:"pointer"}}>DISCARD</button>
+            <button onClick={function(){cancelPushRest();p.onFinish(rows,sec);}} style={{padding:"10px 18px",borderRadius:10,border:"none",background:OR,color:"#fff",fontFamily:"Barlow Condensed,sans-serif",fontSize:16,fontWeight:700,cursor:"pointer"}}>FINISH</button>
           </div>
         </div>
       </div>
@@ -4254,7 +4686,7 @@ function WorkoutLog(p){
                           <select value={set.rir} onChange={function(e){setVal(ri,si,"rir",e.target.value);}} style={{background:SU,border:"1px solid "+BORD,borderRadius:6,padding:"7px 2px",color:TX,fontSize:12,outline:"none",cursor:"pointer",width:"100%",textAlign:"center"}}>
                             {[0,1,2,3,4,"5+"].map(function(v){return <option key={v} value={v}>{v}</option>;})}
                           </select>
-                          <button onClick={function(){toggleDone(ri,si);}} style={{height:30,borderRadius:6,border:"1.5px solid "+(set.done?OR:BORD),background:set.done?OR:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"background .15s"}}>
+                          <button onClick={function(){toggleDone(ri,si);}} aria-label={(set.done?"Undo set ":"Mark set ")+(si+1)+" done"} aria-pressed={!!set.done} style={{height:30,borderRadius:6,border:"1.5px solid "+(set.done?OR:BORD),background:set.done?OR:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"background .15s"}}>
                             {set.done&&<Ic d={D.check} z={13} c="#fff"/>}
                           </button>
                         </div>
@@ -4305,7 +4737,7 @@ function WorkoutLog(p){
                           <select value={set.rir} onChange={function(e){setVal(ri,si,"rir",e.target.value);}} style={{background:SU,border:"1px solid "+BORD,borderRadius:6,padding:"7px 2px",color:TX,fontSize:12,outline:"none",cursor:"pointer",width:"100%",textAlign:"center"}}>
                             {[0,1,2,3,4,"5+"].map(function(v){return <option key={v} value={v}>{v}</option>;})}
                           </select>
-                          <button onClick={function(){toggleDone(ri,si);}} style={{height:30,borderRadius:6,border:"1.5px solid "+(set.done?OR:BORD),background:set.done?OR:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"background .15s"}}>
+                          <button onClick={function(){toggleDone(ri,si);}} aria-label={(set.done?"Undo set ":"Mark set ")+(si+1)+" done"} aria-pressed={!!set.done} style={{height:30,borderRadius:6,border:"1.5px solid "+(set.done?OR:BORD),background:set.done?OR:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"background .15s"}}>
                             {set.done&&<Ic d={D.check} z={13} c="#fff"/>}
                           </button>
                         </div>
@@ -7506,6 +7938,133 @@ function LayoutEditor(p){
   );
 }
 
+/* Notification settings. The switch is the permission prompt: browsers only
+   grant push from a real tap, so everything below it stays hidden until the
+   subscription actually exists. */
+function NotificationsCard(){
+  var P=window.LOCKEDPush;
+  var [st,setSt]=useState(function(){
+    return P?P.status():{supported:false,needsInstall:false,permission:"unsupported",enabled:false,prefs:{}};
+  });
+  var [busy,setBusy]=useState(false);
+  var [testing,setTesting]=useState(false);
+  var [err,setErr]=useState("");
+  var [note,setNote]=useState("");
+  var prefs=st.prefs||{};
+
+  function reread(){if(P)setSt(P.status());}
+
+  async function toggleMain(){
+    if(!P||busy)return;
+    setErr("");setNote("");setBusy(true);
+    try{
+      if(st.enabled){
+        await P.disable();
+        setNote("Notifications turned off.");
+      }else{
+        await P.enable();
+        setNote("You're set — rest timers and daily reminders will arrive on this device.");
+      }
+    }catch(e){setErr(e&&e.message?e.message:"Couldn't change notifications.");}
+    reread();setBusy(false);
+  }
+
+  async function setPref(patch){
+    if(!P)return;
+    setErr("");setNote("");
+    /* Optimistic: the switch should move under the thumb, not after a round trip. */
+    setSt(Object.assign({},st,{prefs:Object.assign({},prefs,patch)}));
+    try{await P.setPrefs(patch);}
+    catch(e){setErr("Couldn't save that — check your connection.");}
+    reread();
+  }
+
+  async function sendTest(){
+    if(!P||testing)return;
+    setErr("");setNote("");setTesting(true);
+    try{await P.test();setNote("Test sent — it should appear in a moment.");}
+    catch(e){setErr(e&&e.message?e.message:"Test failed.");}
+    setTesting(false);
+  }
+
+  function Row(rp){
+    return (
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:SU,borderRadius:10,padding:"12px 14px",border:"1px solid "+BORD}}>
+        <div style={{flex:1,paddingRight:10}}>
+          <p style={{fontSize:13,fontWeight:600,color:TX,margin:0}}>{rp.title}</p>
+          <p style={{fontSize:11,color:MU,marginTop:1,margin:0,lineHeight:1.4}}>{rp.sub}</p>
+        </div>
+        <button onClick={rp.onToggle} role="switch" aria-checked={!!rp.on} aria-label={rp.title}
+          style={{width:46,height:26,borderRadius:13,border:"none",background:rp.on?OR:BORD,cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
+          <div style={{width:20,height:20,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:rp.on?23:3,transition:"left .2s"}}/>
+        </button>
+      </div>
+    );
+  }
+
+  function TimeRow(tp){
+    return (
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"2px 4px 0"}}>
+        <p style={{fontSize:12,color:MU,margin:0}}>{tp.label}</p>
+        <input type="time" value={tp.value} onChange={function(e){if(e.target.value)tp.onChange(e.target.value);}}
+          aria-label={tp.label}
+          style={{background:SU,border:"1px solid "+BORD,borderRadius:8,padding:"7px 10px",color:TX,fontSize:13,outline:"none",colorScheme:"dark"}}/>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{background:ELEV,borderRadius:R_LG,padding:S4}}>
+      <p style={{fontSize:11,fontWeight:700,color:OR,letterSpacing:"0.06em",marginBottom:4}}>NOTIFICATIONS</p>
+      <p style={{fontSize:12,color:MU,lineHeight:1.5,marginBottom:12}}>Rest timer alerts and a daily nudge — delivered even when the app is closed.</p>
+
+      {st.needsInstall?(
+        <div style={{background:OR_H+"12",border:"1px solid "+OR_H+"35",borderRadius:10,padding:"12px 14px"}}>
+          <p style={{fontSize:12,color:TX,lineHeight:1.6,margin:0}}>
+            On iPhone, notifications need LOCKED installed to your Home Screen. Tap <strong>Share</strong> → <strong>Add to Home Screen</strong>, open LOCKED from the icon, then come back here.
+          </p>
+        </div>
+      ):!st.supported?(
+        <p style={{fontSize:12,color:MU,margin:0}}>This browser doesn't support push notifications.</p>
+      ):(
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <Row title="Push notifications" sub={st.enabled?"On for this device":"Off"} on={st.enabled} onToggle={toggleMain}/>
+
+          {st.permission==="denied"&&!st.enabled&&(
+            <p style={{fontSize:11,color:RE,lineHeight:1.5,margin:0}}>Notifications are blocked for this site in your browser or phone settings. Allow them there, then flip this on.</p>
+          )}
+
+          {st.enabled&&(
+            <React.Fragment>
+              <Row title="Rest timer" sub="Alert the second your rest is up" on={prefs.rest!==false}
+                onToggle={function(){setPref({rest:prefs.rest===false});}}/>
+
+              <Row title="Training day" sub="Which day of your split is up today" on={prefs.training!==false}
+                onToggle={function(){setPref({training:prefs.training===false});}}/>
+              {prefs.training!==false&&<TimeRow label="Send at" value={prefs.trainingTime||"07:30"}
+                onChange={function(v){setPref({trainingTime:v});}}/>}
+
+              <Row title="Daily check-in" sub="Skipped automatically once you've logged it" on={prefs.checkin!==false}
+                onToggle={function(){setPref({checkin:prefs.checkin===false});}}/>
+              {prefs.checkin!==false&&<TimeRow label="Send at" value={prefs.checkinTime||"08:00"}
+                onChange={function(v){setPref({checkinTime:v});}}/>}
+
+              <button onClick={sendTest} disabled={testing}
+                style={{width:"100%",padding:"11px",borderRadius:9,border:"1px solid "+BORD,background:"transparent",color:TX,fontSize:13,fontWeight:600,cursor:testing?"default":"pointer",opacity:testing?0.6:1}}>
+                {testing?"Sending…":"Send a test notification"}
+              </button>
+            </React.Fragment>
+          )}
+
+          {busy&&<p style={{fontSize:11,color:MU,margin:0}}>Working…</p>}
+          {err&&<p style={{fontSize:11,color:RE,lineHeight:1.5,margin:0}}>{err}</p>}
+          {!err&&note&&<p style={{fontSize:11,color:GR,lineHeight:1.5,margin:0}}>{note}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsScreen(p){
   var [settingsView,setSettingsView]=useState("main");
   var [name,setName]=useState(p.profile.displayName||"");
@@ -7570,6 +8129,7 @@ function SettingsScreen(p){
             <button onClick={function(){setSettingsView("layout");}} style={{padding:"9px 16px",borderRadius:11,border:"none",background:"linear-gradient(135deg,"+OR_H+",#EA580C)",color:"#fff",fontFamily:"Barlow Condensed,sans-serif",fontSize:14,fontWeight:800,letterSpacing:"0.04em",cursor:"pointer",flexShrink:0}}>CUSTOMIZE</button>
           </div>
         </div>
+        <NotificationsCard/>
         <p className="ds-section-hd" style={{marginBottom:-4}}>ACCOUNT</p>
         {window.LOCKED&&window.LOCKED.isGuest&&(
           <div style={{background:OR_H+"14",borderRadius:13,padding:"15px",border:"1px solid "+OR_H+"40"}}>
@@ -14169,7 +14729,7 @@ function CoachScreen(p){
     sd("coachLastMsgs",[]);
     sd("coachLastHist",[]);
   }
-  var [coachTab,setCoachTab]=useState("chat");
+  var [coachTab,setCoachTab]=useState(p.initialTab||"chat");
   var [instructions,setInstructionsRaw]=useState(function(){return ld("coachInstructions","");});
   var [instrDraft,setInstrDraft]=useState(function(){return ld("coachInstructions","");});
   var [instrSaved,setInstrSaved]=useState(false);
@@ -15305,7 +15865,10 @@ function FeedbackScreen(p){
   var [saved,setSaved]=useState(false);
   var [showHistory,setShowHistory]=useState(false);
 
-  function setEntries(fn){setEntriesRaw(function(prev){var n=typeof fn==="function"?fn(prev):fn;sd("feedback",n);return n;});}
+  function setEntries(fn){setEntriesRaw(function(prev){var n=typeof fn==="function"?fn(prev):fn;sd("feedback",n);
+    /* Tell the reminder service today is logged so it stays quiet. */
+    if(window.LOCKEDPush)window.LOCKEDPush.refresh(true);
+    return n;});}
 
   function submit(){
     var entry={
@@ -17983,6 +18546,7 @@ function App(){
   var [cardioSuccessMsg,setCardioSuccessMsg]=useState("");
   var [showResumeDialog,setShowResumeDialog]=useState(false);
   var [showTutorial,setShowTutorial]=useState(function(){return !ld("tutorialSeen",false);});
+  var [coachInitialTab,setCoachInitialTab]=useState(null); /* set when a check-in notification opens the app */
 
   /* Auto-sync profile from Supabase if missing but user is authenticated */
   useEffect(function(){
@@ -18137,9 +18701,35 @@ function App(){
     setScreen("home");
     /* Sync to cloud immediately after workout is saved */
     syncBidirectional().catch(function(){});
+    /* Today is trained and the split has advanced — refresh what tomorrow's
+       reminder will say. */
+    if(window.LOCKEDPush)window.LOCKEDPush.refresh(true);
   }
 
   function go(scr){setScreen(scr);}
+
+  /* Notifications route into the app: a cold start carries ?open=…, and a tap
+     on an already-open app arrives as a message from the service worker. */
+  useEffect(function(){
+    function open(what){
+      if(what==="checkin"){setCoachInitialTab("check-in");setScreen("coach");}
+      else if(what==="workout")setScreen(ld("activeWorkout",null)?"workout":"train");
+    }
+    try{
+      var param=new URLSearchParams(window.location.search).get("open");
+      if(param){
+        open(param);
+        window.history.replaceState({},"",window.location.pathname);
+      }
+    }catch(e){}
+    function onPushOpen(e){
+      var url=(e.detail&&e.detail.url)||"";
+      if(url.indexOf("checkin")>-1)open("checkin");
+      else if(url.indexOf("workout")>-1)open("workout");
+    }
+    window.addEventListener("lockedPushOpen",onPushOpen);
+    return function(){window.removeEventListener("lockedPushOpen",onPushOpen);};
+  },[]);
 
   if(!profile||!profile.displayName||!profile.username) return <Onboarding onComplete={completeOnboarding}/>;
 
@@ -18160,7 +18750,7 @@ function App(){
     if(screen==="fuel")     return <FuelTab useKg={useKg} prs={prs} setPrs={setPrs} customs={customs} onCustom={addCustom} splits={splits} setSplits={setSplits} history={history} profile={profile} go={go}/>;
     else if(screen==="shopping") content=<ShoppingBudgetTab useKg={useKg} profile={profile} go={go}/>;
     else if(screen==="betaAdmin") content=<BetaAdminPanel go={go}/>;
-    else if(screen==="coach")    content=<CoachScreen useKg={useKg} prs={prs} splits={splits} setSplits={setSplits} history={history} profile={profile} go={go}/>;
+    else if(screen==="coach")    content=<CoachScreen useKg={useKg} prs={prs} splits={splits} setSplits={setSplits} history={history} profile={profile} go={go} initialTab={coachInitialTab}/>;
     else if(!content) content=<HomeScreen useKg={useKg} prs={prs} setPrs={setPrs} customs={customs} onCustom={addCustom} splits={splits} setSplits={setSplits} history={history} setHistory={setHistory} profile={profile} go={go}/>;
     return <ScreenBoundary key={screen}>{content}</ScreenBoundary>;
   }
