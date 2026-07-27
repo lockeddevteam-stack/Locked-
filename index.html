@@ -33,19 +33,18 @@
           if(!data || !data.version) return;
           var latest = data.version;
           if(stored && stored !== latest){
-            /* New deploy detected — clear SW caches then hard reload */
+            /* New deploy detected — drop the caches and hard reload.
+               This used to unregister the service worker, which destroys the
+               browser's push subscription along with it: every single deploy
+               silently switched the user's notifications off. The worker is
+               network-first for the shell and calls skipWaiting(), so clearing
+               caches is all that was ever needed to pick up a new build. */
             localStorage.setItem("lk_deployVersion", latest);
-            if("serviceWorker" in navigator && "caches" in window){
-              navigator.serviceWorker.getRegistrations()
-                .then(function(regs){
-                  return Promise.all(regs.map(function(r){ return r.unregister(); }));
-                })
-                .then(function(){
-                  return caches.keys().then(function(keys){
-                    return Promise.all(keys.map(function(k){ return caches.delete(k); }));
-                  });
-                })
-                .then(function(){ window.location.reload(true); });
+            if("caches" in window){
+              caches.keys().then(function(keys){
+                return Promise.all(keys.map(function(k){ return caches.delete(k); }));
+              }).then(function(){ window.location.reload(true); })
+                .catch(function(){ window.location.reload(true); });
             } else {
               window.location.reload(true);
             }
@@ -1530,13 +1529,25 @@
 
   /* ---- rest timer ---- */
 
+  /* A 404 means the Worker has no subscription for this device — re-register
+     and try once more rather than failing silently. Losing a rest alert is the
+     one thing this feature exists to prevent. */
+  async function postHealing(path, body) {
+    var res = await post(path, body).catch(function () { return null; });
+    if (res && res.status === 404) {
+      var ok = await enable().then(function () { return true; }).catch(function () { return false; });
+      if (ok) res = await post(path, body).catch(function () { return null; });
+    }
+    return !!(res && res.ok);
+  }
+
   function scheduleRest(seconds, exerciseName) {
     if (!isEnabled() || !getPrefs().rest) return Promise.resolve(false);
-    return post("/push/rest", {
+    return postHealing("/push/rest", {
       deviceId: deviceId(),
       seconds: Math.round(seconds),
       exercise: exerciseName || null
-    }).then(function (res) { return res.ok; }).catch(function () { return false; });
+    });
   }
 
   function cancelRest() {
@@ -1556,11 +1567,11 @@
        nothing when the window is half an hour. */
     if (!force && Date.now() - _lastIdleSchedule < 60000) return Promise.resolve(false);
     _lastIdleSchedule = Date.now();
-    return post("/push/idle", {
+    return postHealing("/push/idle", {
       deviceId: deviceId(),
       seconds: Math.round(seconds),
       workout: workoutName || null
-    }).then(function (res) { return res.ok; }).catch(function () { return false; });
+    });
   }
 
   function cancelIdleCheck() {
@@ -1743,11 +1754,20 @@
   };
   if (window.LOCKED) window.LOCKED.push = window.LOCKEDPush;
 
-  /* On boot: re-register if permission is granted but the Worker record has
-     aged out, and refresh the snapshot. */
+  /* On boot: heal anything that has drifted.
+
+     A browser push subscription does not survive the service worker being
+     unregistered, and the app used to do exactly that on every deploy — so
+     notifications would appear to be on while the subscription behind them
+     was gone. If permission is still granted, re-subscribe silently; the user
+     should never have to toggle a switch to recover from our own deploy. */
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.ready.then(function () {
-      if (isEnabled()) refresh(true);
+    navigator.serviceWorker.ready.then(async function (reg) {
+      if (!isEnabled()) return;
+      var live = null;
+      try { live = await reg.pushManager.getSubscription(); } catch (e) {}
+      if (!live) { await enable().catch(function () {}); return; }
+      refresh(true);
     }).catch(function () {});
   }
 })();
@@ -8778,16 +8798,16 @@ function SettingsScreen(p){
           <p style={{fontSize:11,color:MU,marginBottom:8}}>Last sync: {ld("lastSync","Never")}</p>
           <button onClick={function(){syncBetaData(function(){alert("Data synced!");},function(e){alert("Sync failed: "+e);});}} style={{width:"100%",padding:"11px",borderRadius:9,border:"none",background:"#22C55E",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",marginBottom:8}}>Send Data to Dev</button>
           <button onClick={function(){
-            /* Force refresh — clears SW caches only, preserves all user data */
+            /* Force refresh — clears SW caches only. It must not unregister the
+               service worker: that takes the push subscription with it and
+               turns notifications off. User data is untouched either way. */
             localStorage.removeItem("lk_deployVersion");
-            if("serviceWorker" in navigator && "caches" in window){
+            if("caches" in window){
               caches.keys().then(function(keys){
                 return Promise.all(keys.map(function(k){return caches.delete(k);}));
               }).then(function(){
-                return navigator.serviceWorker.getRegistrations();
-              }).then(function(regs){
-                return Promise.all(regs.map(function(r){return r.unregister();}));
-              }).then(function(){
+                window.location.reload(true);
+              }).catch(function(){
                 window.location.reload(true);
               });
             } else {
