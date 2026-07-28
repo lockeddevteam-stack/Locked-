@@ -1,83 +1,59 @@
-/* LOCKED service worker
- *
- * Strategy:
- *  - App shell (navigations / index.html): network-first, cache fallback.
- *    The app has its own deploy-version check that clears caches and
- *    reloads when a new build ships, so the cache never goes stale for long.
- *  - Static assets (icons, manifest): cache-first.
- *  - /api/* (Cloudflare Worker proxy) and any cross-origin request:
- *    never intercepted — always straight to the network.
- *
- * It also handles push: rest-timer alerts and the daily training / check-in
- * reminders arrive here from the Worker and are shown even when the app is
- * closed. See worker/push.js for the sending side.
- */
-var CACHE = "locked-shell-v2";
-var PRECACHE = [
-  "/",
-  "/manifest.json",
-  "/icon-192.png",
-  "/icon-512.png",
-  "/icon-512-maskable.png",
-  "/apple-touch-icon.png"
+/* LOCKED service worker — conservative network-first strategy.
+   The app head registers /sw.js and, on every load, compares the deploy
+   version from the Worker; on a new deploy it clears all caches before hard
+   reloading. (It must NOT unregister this worker: a push subscription belongs
+   to its service worker registration and dies with it, which silently switched
+   notifications off on every deploy.) So this cache can never pin users to a
+   stale build — it only serves as an offline fallback.
+
+   Strategy:
+   • HTML/navigation: network first, cache fallback (offline support).
+   • Same-origin static + pinned CDN libs: network first, cache fallback.
+   • Everything else (worker API, Supabase, Groq): network only, never cached. */
+
+var CACHE = "locked-v1";
+
+var CACHEABLE_HOSTS = [
+  self.location.host,
+  "unpkg.com",
+  "cdn.jsdelivr.net",
+  "fonts.googleapis.com",
+  "fonts.gstatic.com"
 ];
 
 self.addEventListener("install", function (e) {
-  e.waitUntil(
-    caches.open(CACHE).then(function (c) {
-      return c.addAll(PRECACHE);
-    }).then(function () {
-      return self.skipWaiting();
-    })
-  );
+  self.skipWaiting();
 });
 
 self.addEventListener("activate", function (e) {
-  e.waitUntil(
-    caches.keys().then(function (keys) {
-      return Promise.all(keys.filter(function (k) {
-        return k !== CACHE;
-      }).map(function (k) {
-        return caches.delete(k);
-      }));
-    }).then(function () {
-      return self.clients.claim();
-    })
-  );
+  e.waitUntil(self.clients.claim());
 });
 
 self.addEventListener("fetch", function (e) {
   var req = e.request;
   if (req.method !== "GET") return;
 
-  var url = new URL(req.url);
-  // Never touch API calls or cross-origin requests (Supabase, fonts, CDN).
-  if (url.origin !== self.location.origin) return;
-  if (url.pathname === "/api" || url.pathname.indexOf("/api/") === 0) return;
+  var url;
+  try { url = new URL(req.url); } catch (err) { return; }
+  if (CACHEABLE_HOSTS.indexOf(url.host) === -1) return; /* API traffic: untouched */
 
-  // Navigations + app shell: network-first so new deploys land immediately.
-  if (req.mode === "navigate" || url.pathname === "/" || url.pathname === "/index.html") {
-    e.respondWith(
-      fetch(req).then(function (res) {
-        var copy = res.clone();
-        caches.open(CACHE).then(function (c) { c.put("/", copy); });
-        return res;
-      }).catch(function () {
-        return caches.match("/");
-      })
-    );
-    return;
-  }
-
-  // Everything else same-origin (icons, manifest): cache-first.
   e.respondWith(
-    caches.match(req).then(function (hit) {
-      return hit || fetch(req).then(function (res) {
-        var copy = res.clone();
-        caches.open(CACHE).then(function (c) { c.put(req, copy); });
+    fetch(req)
+      .then(function (res) {
+        if (res && res.ok) {
+          var copy = res.clone();
+          caches.open(CACHE).then(function (c) { c.put(req, copy); }).catch(function () {});
+        }
         return res;
-      });
-    })
+      })
+      .catch(function () {
+        return caches.match(req).then(function (hit) {
+          if (hit) return hit;
+          /* offline navigation with no cache → fall back to cached shell */
+          if (req.mode === "navigate") return caches.match("/");
+          return Response.error();
+        });
+      })
   );
 });
 
