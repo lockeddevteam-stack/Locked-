@@ -50738,12 +50738,23 @@ function App() {
         var meta = user.user_metadata || {};
         window.LOCKED._client.from("profiles").select("*").eq("user_id", user.id).single().then(function (r) {
           if (!r || !r.data) return;
-          var syncedProfile = {
-            displayName: r.data.display_name || r.data.displayName || meta.displayName || "Athlete",
-            username: r.data.username || meta.username || (user.email ? user.email.split("@")[0] : "user"),
-            useKg: r.data.use_kg !== false,
-            createdAt: r.data.created_at || new Date().toLocaleDateString()
-          };
+          var local = ld("profile", null) || profile || {};
+          /* Only take the remote unit when the row actually stores one. The
+             old read defaulted a missing or null column to kilograms, so a
+             backfill on a device set to pounds silently switched the whole
+             app mid-workout. Absent means "not recorded", not "kilograms". */
+          var remoteKg = typeof r.data.use_kg === "boolean" ? r.data.use_kg : null;
+          var useKgNext = remoteKg === null
+            ? typeof local.useKg === "boolean" ? local.useKg : true
+            : remoteKg;
+          /* Merge rather than replace — this fills in the fields the local
+             profile is missing, it does not discard the ones it has. */
+          var syncedProfile = Object.assign({}, local, {
+            displayName: local.displayName || r.data.display_name || r.data.displayName || meta.displayName || "Athlete",
+            username: local.username || r.data.username || meta.username || (user.email ? user.email.split("@")[0] : "user"),
+            useKg: useKgNext,
+            createdAt: local.createdAt || r.data.created_at || new Date().toLocaleDateString()
+          });
           sd("profile", syncedProfile);
           setProfileRaw(syncedProfile);
           setUseKgRaw(syncedProfile.useKg);
