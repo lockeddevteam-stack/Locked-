@@ -1135,7 +1135,14 @@
 })();
   </script>
   <style>
-    html,body{margin:0;padding:0;background:#080809;min-height:100vh;}
+    html,body{margin:0;padding:0;background:#080809;min-height:100vh;overflow-x:hidden;}
+    @supports (min-height:100dvh){html,body{min-height:100dvh;}}
+    /* The app shell must not be a scroll container: on iOS an ancestor with
+       overflow set turns position:fixed children loose, which is how the
+       bottom nav ends up floating mid-page. The guard lives on html/body
+       above, where it is safe. */
+    .lk-shell{min-height:100vh;}
+    @supports (min-height:100dvh){.lk-shell{min-height:100dvh;}}
     *{-webkit-tap-highlight-color:transparent;}
   </style>
 </head>
@@ -6924,6 +6931,17 @@ function WorkoutLog(p) {
   function getLastSession(exName) {
     return lastSessionIndex[exName] || null;
   }
+  /* True only when the movement has not been trained in over a month, which is
+     the one case where "last done" is information rather than clutter. Dates
+     are stored either as a locale string ("7/26/2026") or an ISO day; an
+     unparseable value is treated as stale so a returning user still gets the
+     heads-up. */
+  function staleLast(ds) {
+    if (!ds) return false;
+    var t = Date.parse(ds);
+    if (isNaN(t)) return true;
+    return Date.now() - t > 31 * 24 * 60 * 60 * 1000;
+  }
   function mkRow(id) {
     var ex = getEx(id);
     var last = getLastSession(ex.name);
@@ -8639,17 +8657,7 @@ function WorkoutLog(p) {
       fontSize: "0.75rem",
       color: MU
     }
-  }, Math.round(totalVol), " ", unit), React.createElement("span", {
-    style: {
-      padding: "2px 8px",
-      borderRadius: 9,
-      border: "1px solid " + OR_H + "50",
-      background: OR_H + "12",
-      color: OR,
-      fontSize: "0.6875rem",
-      fontWeight: 700
-    }
-  }, useKg ? "KG" : "LBS"))), React.createElement("div", {
+  }, Math.round(totalVol), " ", unit))), React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -9586,11 +9594,21 @@ function WorkoutLog(p) {
         padding: "12px 12px",
         borderBottom: "1px solid " + BORD,
         display: "flex",
-        alignItems: "center",
+        flexDirection: "column",
         gap: 8
       },
       onContextMenu: function (e) {
         e.preventDefault();
+      }
+    },
+    /* Row 1 — the exercise name gets the full width of the card so it reads
+       across the top instead of wrapping down a column squeezed by the
+       controls that used to sit beside it. */
+    React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8
       }
     }, React.createElement("div", {
       "data-draghandle": "1",
@@ -9633,13 +9651,15 @@ function WorkoutLog(p) {
       }
     })), React.createElement("div", {
       style: {
-        flex: 1
+        flex: 1,
+        minWidth: 0
       }
     }, React.createElement("p", {
       style: {
         fontWeight: 700,
         fontSize: "0.9375rem",
-        color: TX
+        color: TX,
+        lineHeight: 1.25
       }
     }, row.name), React.createElement("p", {
       style: {
@@ -9653,7 +9673,11 @@ function WorkoutLog(p) {
         fontSize: "0.6875rem",
         marginLeft: 8
       }
-    }, "\xB7 +", row.startResist, "kg base"), row.lastDate && React.createElement("span", {
+    }, "\xB7 +", row.startResist, "kg base"),
+    /* "Last done" is only worth the space when you have been away from the
+       movement long enough for it to be news — otherwise it is noise on
+       every card, every session. */
+    staleLast(row.lastDate) && React.createElement("span", {
       style: {
         color: OR_H + "90",
         fontSize: "0.6875rem",
@@ -9673,20 +9697,19 @@ function WorkoutLog(p) {
         color: OR,
         fontWeight: 800
       }
-    }, "SS")), best && React.createElement("div", {
+    }, "SS"))),
+    /* Row 2 — the controls, on their own line and right-aligned. The PR badge
+       that used to live here has moved out entirely; PRs belong on Progress,
+       not in the middle of a working set. */
+    React.createElement("div", {
       style: {
-        background: WA_H + "18",
-        borderRadius: 6,
-        padding: "2px 8px",
-        border: "1px solid " + WA_H + "30"
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        flexWrap: "wrap",
+        gap: 6
       }
-    }, React.createElement("span", {
-      style: {
-        fontSize: "0.6875rem",
-        color: WA,
-        fontWeight: 700
-      }
-    }, useKg ? Math.round(best.w * 10) / 10 : Math.round(best.w * 2.20462 * 10) / 10, unit, " PR")), React.createElement("button", {
+    }, React.createElement("button", {
       onClick: function () {
         setShowExDetail(row);
       },
@@ -9775,9 +9798,19 @@ function WorkoutLog(p) {
       onClick: function () {
         removeRow(ri);
       },
+      "aria-label": "Remove exercise",
+      /* The design system inflates any small button to a 44px min-width and
+         min-height for touch. That is what pushed this one out of its square:
+         44 tall against a 26 wide box, spilling past the card edge. The
+         `button::after` rule already supplies a 44x44 invisible hit area, so
+         pinning both minimums here keeps the tap target without the stretch. */
       style: {
-        width: 24,
-        height: 24,
+        width: 26,
+        height: 26,
+        minWidth: 26,
+        minHeight: 26,
+        padding: 0,
+        boxSizing: "border-box",
         borderRadius: 6,
         border: "1px solid " + RE_H + "40",
         background: RE_H + "12",
@@ -9789,9 +9822,9 @@ function WorkoutLog(p) {
       }
     }, React.createElement(Ic, {
       d: D.x,
-      z: 11,
+      z: 12,
       c: RE
-    }))), React.createElement("div", {
+    })))), React.createElement("div", {
       style: {
         padding: "8px 12px"
       }
@@ -28795,45 +28828,10 @@ function SettingsScreen(p) {
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, "Save Stats"))), React.createElement("div", {
-    style: {
-      background: CARD,
-      borderRadius: 13,
-      padding: "16px",
-      border: "1px solid " + BORD
-    }
-  }, React.createElement("p", {
-    style: {
-      fontSize: "0.6875rem",
-      fontWeight: 700,
-      color: MU,
-      marginBottom: 8
-    }
-  }, "UNITS"), React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8
-    }
-  }, ["kg", "lbs"].map(function (u) {
-    var act = p.useKg && u === "kg" || !p.useKg && u === "lbs";
-    return React.createElement("button", {
-      key: u,
-      onClick: function () {
-        if (u === "kg" && !p.useKg || u === "lbs" && p.useKg) p.toggleUnit();
-      },
-      style: {
-        flex: 1,
-        padding: "12px",
-        borderRadius: 9,
-        border: "1.5px solid " + (act ? OR : BORD),
-        background: act ? OR_H + "15" : "transparent",
-        color: act ? OR : MU,
-        fontSize: "1rem",
-        fontWeight: 800,
-        cursor: "pointer"
-      }
-    }, u.toUpperCase());
-  }))), React.createElement("div", {
+  }, "Save Stats"))),
+  /* The standalone UNITS card was removed — Preferences → Weight Unit below
+     is the single place the unit is set. */
+  React.createElement("div", {
     style: {
       background: CARD,
       borderRadius: 13,
@@ -51227,12 +51225,11 @@ function App() {
       cursor: "pointer"
     }
   }, "Resume")))), React.createElement("div", {
+    className: "lk-shell",
     style: {
       maxWidth: 420,
       margin: "0 auto",
-      minHeight: "100vh",
-      background: BG,
-      overflowX: "hidden"
+      background: BG
     }
   }, workoutActive && !onWorkoutScreen && React.createElement("div", {
     onClick: function () {
