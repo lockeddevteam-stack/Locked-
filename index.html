@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="LOCKED"/>
@@ -1800,12 +1800,19 @@ var OR = "var(--color-accent)",
   MU = "var(--color-text-muted)",
   SU = "var(--color-text-subtle)";
 var GR = "var(--color-success)",
+  /* White text needs 4.5:1; the bright green only reaches 2.27:1, so filled
+     buttons use this and the plain token stays a text colour. */
+  GR_D = "var(--color-success-deep)",
   RE = "var(--color-error)",
   BLU = "var(--color-info)";
 var OR_H = "#F97316",
   ORD_H = "#7C3A0E",
   GR_H = "#22C55E",
-  RE_H = "#EF4444",
+  /* Kept in step with --color-error. These _H constants exist because a hex
+     is needed to build translucent tints (RE_H + "12"), and the same value is
+     then used for the text sitting on that tint — at #EF4444 that pairing
+     came out at 4.22:1, just under AA. */
+  RE_H = "#F05151",
   BLU_H = "#3B82F6";
 var SHADOW = "var(--color-shadow)";
 var WA = "var(--color-warning)",
@@ -1813,7 +1820,10 @@ var WA = "var(--color-warning)",
   PRO = "var(--color-macro-protein)",
   CAR = "var(--color-macro-carbs)",
   FAT = "var(--color-macro-fat)",
-  EMD = "var(--color-positive-alt)";
+  EMD = "var(--color-positive-alt)",
+  /* Deep enough to carry white text at 4.5:1; the plain token is a text
+     colour and stays bright. */
+  EMD_D = "var(--color-positive-alt-deep)";
 var ORD2 = "var(--color-accent-deep)",
   ORTX = "var(--color-accent-text)",
   TX3 = "var(--color-text-tertiary)",
@@ -2000,7 +2010,35 @@ function useSheetDrag(onClose) {
     }
   };
 }
-var CSS = ["*{box-sizing:border-box;margin:0;padding:0;}", "html{color-scheme:dark light;--color-bg:#000000;--color-surface:#0D0D0F;--color-card:#1C1C1E;--color-border:rgba(255,255,255,0.09);--color-text:#F5F5F7;--color-text-muted:#A1A1AA;--color-text-subtle:#2C2C2E;--color-accent:#F97316;--color-accent-dark:#7C3A0E;--color-success:#22C55E;--color-error:#EF4444;--color-info:#3B82F6;--color-shadow:rgba(0,0,0,0.5);--color-shadow-light:rgba(0,0,0,0.18);--color-warning:#F59E0B;--color-feature:#8B5CF6;--color-macro-protein:#3B82F6;--color-macro-carbs:#F59E0B;--color-macro-fat:#EC4899;--color-positive-alt:#10B981;--color-accent-deep:#C2410C;--color-accent-text:#FB923C;--color-accent-rgb:249,115,22;--color-text-tertiary:#8E8E93;--glass-bar:rgba(0,0,0,0.78);--color-fill1:#111113;--color-fill2:#18181B;--color-fill3:#2A2A2F;}", "html.light-mode,html[data-style-profile='light']{--color-bg:#F2F2F7;--color-surface:#F2F2F7;--color-card:#FFFFFF;--color-border:rgba(60,60,67,0.12);--color-text:#1C1C1E;--color-text-muted:#63636B;--color-text-subtle:#E5E5EA;--color-shadow:rgba(15,23,42,0.10);--color-shadow-light:rgba(15,23,42,0.06);--color-accent-text:#C2410C;--color-warning:#B45309;--color-success:#15803D;--color-error:#DC2626;--color-info:#2563EB;--color-feature:#6D28D9;--color-macro-protein:#2563EB;--color-macro-carbs:#B45309;--color-macro-fat:#BE185D;--color-positive-alt:#047857;--color-text-tertiary:#86868B;--glass-bar:rgba(242,242,247,0.85);--color-fill1:#E4E6E9;--color-fill2:#F0F2F5;--color-fill3:#D4D8DF;}", "html.light-mode nav,html[data-style-profile='light'] nav{background:rgba(242,242,247,0.82)!important;}", "body{background:var(--color-bg);color:var(--color-text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;font-size:1.0625rem;line-height:1.5;transition:background-color 0.3s ease,color 0.3s ease;}", "::-webkit-scrollbar{display:none;}", "input,textarea,button,select{font-family:inherit;font-size:inherit;}", "input,textarea{-webkit-user-select:text;user-select:text;}", "@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}", "@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}", "@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}", "@keyframes slideDownBanner{from{transform:translateX(-50%) translateY(-100%)}to{transform:translateX(-50%) translateY(0)}}", "@keyframes slideFromTop{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}", "@keyframes shimmer{0%{background-position:-1000px 0}100%{background-position:1000px 0}}", "@keyframes tutFadeIn{from{opacity:0}to{opacity:1}}", "@keyframes tutFadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}", "@keyframes tutIconIn{0%{opacity:0;transform:scale(0.3)}55%{transform:scale(1.14)}80%{transform:scale(0.96)}100%{opacity:1;transform:scale(1)}}", "@keyframes tutPulseGlow{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:1;transform:scale(1.18)}}", "@keyframes tutGridMove{from{transform:translate(0,0)}to{transform:translate(40px,40px)}}", "@keyframes tutCursor{0%,100%{opacity:1}50%{opacity:0}}", "@keyframes tutCircleDraw{to{stroke-dashoffset:0}}", "@keyframes tutCheckDraw{to{stroke-dashoffset:0}}", "@keyframes lockBodyIn{0%{transform:scale(0.78);opacity:0}55%{transform:scale(1.06);opacity:1}78%{transform:scale(0.97)}100%{transform:scale(1)}}", "@keyframes lockShackleRotate{0%{transform:rotateZ(-82deg)}25%{transform:rotateZ(-95deg)}50%{transform:rotateZ(82deg)}75%{transform:rotateZ(8deg)}100%{transform:rotateZ(0deg)}}", "@keyframes lockShackleOpen{0%{transform:rotateZ(-85deg)}100%{transform:rotateZ(-85deg)}}", "@keyframes lockRingExpand{0%{transform:scale(0.4);opacity:0.85}100%{transform:scale(2.2);opacity:0}}", "@keyframes lockRingExpand2{0%{transform:scale(0.4);opacity:0.5}100%{transform:scale(2.8);opacity:0}}", "@keyframes lockFinalGlow{0%{filter:drop-shadow(0 0 0px transparent)}60%{filter:drop-shadow(0 0 24px rgba(249,115,22,0.85))}100%{filter:drop-shadow(0 0 10px rgba(249,115,22,0.35))}}", "@keyframes tutButtonGlow{0%,100%{box-shadow:0 0 30px rgba(249,115,22,0.45)}50%{box-shadow:0 0 60px rgba(249,115,22,0.85)}}", "@keyframes tutP1{to{opacity:0;transform:translate(-90px,-90px) scale(0)}}", "@keyframes tutP2{to{opacity:0;transform:translate(90px,-90px) scale(0)}}", "@keyframes tutP3{to{opacity:0;transform:translate(0,-120px) scale(0)}}", "@keyframes tutP4{to{opacity:0;transform:translate(120px,0) scale(0)}}", "@keyframes tutP5{to{opacity:0;transform:translate(-120px,0) scale(0)}}", "@keyframes tutP6{to{opacity:0;transform:translate(80px,90px) scale(0)}}", "@keyframes tutP7{to{opacity:0;transform:translate(-80px,90px) scale(0)}}", "@keyframes tutP8{to{opacity:0;transform:translate(50px,-130px) scale(0)}}", "@keyframes tutP9{to{opacity:0;transform:translate(-50px,-130px) scale(0)}}", "@keyframes tutP10{to{opacity:0;transform:translate(130px,50px) scale(0)}}", "@keyframes tutP11{to{opacity:0;transform:translate(-130px,50px) scale(0)}}", "@keyframes tutP12{to{opacity:0;transform:translate(0,130px) scale(0)}}", "@keyframes scalePopOut{0%{transform:scale(0.8);opacity:0}50%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}", "@keyframes bubblePop{0%{transform:scale(0.94);opacity:0}60%{transform:scale(1.03)}100%{transform:scale(1);opacity:1}}", "@keyframes bubbleRise{from{opacity:0;transform:translateY(10px) scale(0.94)}to{opacity:1;transform:translateY(0) scale(1)}}", "@keyframes glowPulse{0%,100%{box-shadow:0 0 20px rgba(249,115,22,0.4)}50%{box-shadow:0 0 40px rgba(249,115,22,0.8)}}", "@keyframes checkPulse{0%{transform:scale(1)}50%{transform:scale(1.3)}100%{transform:scale(1)}}", "@keyframes jiggle{0%,100%{transform:rotate(0deg)}25%{transform:rotate(-1.2deg)}75%{transform:rotate(1.2deg)}}", "@keyframes partialsFlash{0%{transform:scale(1)}40%{transform:scale(1.55);background:var(--color-accent);color:#fff;border-color:var(--color-accent)}100%{transform:scale(1)}}", "@keyframes spin{to{transform:rotate(360deg)}}", "@keyframes progressArc{from{stroke-dashoffset:565}to{stroke-dashoffset:0}}", "/* ── Design system v3 ────────────────────────────────────────────────    Apple-style composition layer: grouped surfaces, a real type scale and    a spacing rhythm. Colours above are unchanged so nothing regresses;    these are additive tokens the DS primitives consume. */ :root {   /* grouped-inset surfaces (iOS Settings / Health pattern) */   --ds-grouped: #000000;   --ds-elevated: #1C1C1E;   --ds-elevated-2: #2C2C2E;   --ds-separator: rgba(84,84,88,0.34);   --ds-fill: rgba(120,120,128,0.20);   --ds-fill-soft: rgba(120,120,128,0.12);   --ds-material: rgba(30,30,32,0.72);    /* type scale */   --ds-t-large: 34px;   /* large title */   --ds-t-title: 26px;   --ds-t-head: 20px;   --ds-t-body: 16px;   --ds-t-sub: 15px;   --ds-t-foot: 13px;   --ds-t-cap: 12px;   --ds-t-cap2: 11px;    /* spacing rhythm */   --ds-s1: 4px;  --ds-s2: 8px;  --ds-s3: 12px;   --ds-s4: 16px; --ds-s5: 20px; --ds-s6: 24px; --ds-s8: 32px;    /* radii */   --ds-r-sm: 10px; --ds-r-md: 14px; --ds-r-lg: 18px; --ds-r-xl: 22px; } html.light-mode {   --ds-grouped: #F2F2F7;   --ds-elevated: #FFFFFF;   --ds-elevated-2: #F2F2F7;   --ds-separator: rgba(60,60,67,0.20);   --ds-fill: rgba(120,120,128,0.16);   --ds-fill-soft: rgba(120,120,128,0.08);   --ds-material: rgba(255,255,255,0.78); }  /* Numerals line up in columns wherever they're compared */ .ds-num { font-variant-numeric: tabular-nums; }  /* Grouped list: rows separated by inset hairlines, not boxed individually */ .ds-list > * + * { border-top: 0.5px solid var(--ds-separator); }  /* Large title that settles as you scroll */ .ds-largetitle {   font-family: \"Barlow Condensed\", sans-serif;   font-size: var(--ds-t-large);   font-weight: 800;   letter-spacing: 0.02em;   line-height: 1.05;   color: var(--color-text);   margin: 0; } .ds-section-hd {   font-size: var(--ds-t-cap2);   font-weight: 600;   letter-spacing: 0.06em;   text-transform: uppercase;   color: var(--color-text-muted);   margin: 0 0 var(--ds-s2);   padding-left: var(--ds-s1); } @media (prefers-reduced-motion: reduce) {   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } } ", "html.theme-slate,html[data-style-profile='slate']{--ds-grouped:#0D1117;--ds-elevated:#21262D;--ds-elevated-2:#2D333B;--ds-sep:rgba(48,54,61,0.9);--ds-fill:rgba(139,148,158,0.16);--ds-fill-soft:rgba(139,148,158,0.09);--ds-material:rgba(13,17,23,0.72);}", "html.theme-navy,html[data-style-profile='navy']{--ds-grouped:#070F1E;--ds-elevated:#112035;--ds-elevated-2:#16294280;--ds-sep:rgba(56,139,253,0.14);--ds-fill:rgba(107,145,190,0.16);--ds-fill-soft:rgba(107,145,190,0.09);--ds-material:rgba(7,15,30,0.75);}", "html.theme-midnight,html[data-style-profile='midnight']{--ds-grouped:#0C0917;--ds-elevated:#1C183A;--ds-elevated-2:#241E47;--ds-sep:rgba(139,92,246,0.16);--ds-fill:rgba(167,155,204,0.16);--ds-fill-soft:rgba(167,155,204,0.09);--ds-material:rgba(12,9,23,0.75);}", "@media (prefers-reduced-motion:reduce){*{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}}", "[style*='color: var(--color-accent)']{color:var(--color-accent-text)!important;}", "[style*='color: rgb(249, 115, 22)']{color:var(--color-accent-text)!important;}", "button[style*='background: var(--color-accent)'][style*='color: rgb(255, 255, 255)'],button[style*='background: var(--color-accent)'][style*='color: #fff']{background:var(--color-accent-deep)!important;}", "@media (prefers-reduced-transparency:reduce){nav,[style*='backdrop-filter'],[style*='var(--glass-bar)'],[style*='rgba(8, 8, 9']{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:var(--color-surface)!important;}}", "button,a,[role=button]{transition:transform .15s ease-out,box-shadow .15s ease-out,background-color .2s ease,color .2s ease,border-color .2s ease,opacity .2s ease;}", "@media (hover:hover) and (pointer:fine){button:hover,a:hover,[role=button]:hover{transform:translateY(-1px);box-shadow:0 4px 14px var(--color-shadow);}}", "button:active,[role=button]:active{transform:scale(0.97);transition-duration:.08s;box-shadow:0 1px 4px var(--color-shadow);}", "button:focus,a:focus,[role=button]:focus{outline:none;box-shadow:inset 0 0 0 2px rgba(var(--color-accent-rgb),0.5);}", "input:focus,textarea:focus,select:focus{transition:all 0.2s ease;box-shadow:inset 0 0 0 2px rgba(var(--color-accent-rgb),0.4),0 0 0 3px rgba(var(--color-accent-rgb),0.1);}", "[style*='background']{transition:background-color 0.24s ease,box-shadow 0.24s ease;}", "p{line-height:1.6;}", "[style*='border-radius'][style*='cursor: pointer']:hover{box-shadow:0 4px 16px var(--color-shadow);}", "h1,h2,h3,h4,h5,h6{font-weight:700;line-height:1.2;}", "[style*='border:1px']{transition:all 0.24s ease;border-color:rgba(36,36,40,0.8);}", "html.light-mode [style*='border:1px'],html[data-style-profile='light'] [style*='border:1px']{border-color:rgba(60,60,67,0.12)!important;}", "button:disabled{opacity:0.4;cursor:not-allowed;transform:none;}", "button,[role=button]{position:relative;}", "input:not([type=checkbox]):not([type=radio]),select{min-height:44px;}", "button::after,[role=button]::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:max(100%,44px);height:max(100%,44px);}", "input::placeholder,textarea::placeholder{color:var(--color-text-tertiary);font-weight:400;}", "html.light-mode input::placeholder,html.light-mode textarea::placeholder{color:rgba(79,101,138,0.6);}", "html.light-mode input,html[data-style-profile='light'] input{background-color:#EFEFF4!important;border-color:rgba(60,60,67,0.16)!important;color:#1C1C1E!important;}", "html.light-mode input[style*='background:'][style*='color:'],html[data-style-profile='light'] input[style*='background:'][style*='color:']{background-color:#EFEFF4!important;color:#1C1C1E!important;border-color:rgba(60,60,67,0.16)!important;}", "html.light-mode textarea,html[data-style-profile='light'] textarea{background-color:#EFEFF4!important;border-color:rgba(60,60,67,0.16)!important;color:#1C1C1E!important;}", "html.light-mode select,html[data-style-profile='light'] select{background-color:#EFEFF4!important;border-color:rgba(60,60,67,0.16)!important;color:#1C1C1E!important;}", "html.light-mode [style*='color:#fff'],html[data-style-profile='light'] [style*='color:#fff']{color:#1C1C1E!important;}", "html.light-mode [style*='background:#111'],html[data-style-profile='light'] [style*='background:#111']{background:#E4E6E9!important;}", "html.light-mode [style*='border:'],html[data-style-profile='light'] [style*='border:']{border-color:#C8CDD6!important;}", "html.light-mode [style*='rgba(8, 8, 9']{background-color:rgba(242,242,247,0.92)!important;}", "html.light-mode button[style*='borderRadius:13'][style*='padding:14px'],html[data-style-profile='light'] button[style*='borderRadius:13'][style*='padding:14px']{background-color:#F0F2F5!important;border-color:#C8CDD6!important;}", "nav{background:rgba(8,8,9,0.8);border-top:1px solid rgba(36,36,40,0.5);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);}", "[style*='box-shadow']:not([style*='none']){box-shadow:0 4px 14px var(--color-shadow)!important;}", "[style*='borderRadius:12'],[style*='borderRadius:10'],[style*='borderRadius:8']{background-color:inherit;border:1px solid rgba(36,36,40,0.8);}", "html.light-mode [style*='borderRadius:12'],html.light-mode [style*='borderRadius:10'],html.light-mode [style*='borderRadius:8']{border-color:#C8CDD6!important;}", "[style*='background:linear-gradient']{box-shadow:0 8px 24px rgba(249,115,22,0.15);}", "input[style*='background']{background-color:rgba(24,24,27,0.8)!important;border:1px solid rgba(36,36,40,0.8)!important;color:#F5F5F5!important;}", "html.light-mode input[style*='background'],html[data-style-profile='light'] input[style*='background']{background-color:#F0F2F5!important;border:1px solid #C8CDD6!important;color:#0F172A!important;}", "input[style*='background']:focus{background-color:rgba(24,24,27,0.95)!important;border-color:rgba(249,115,22,0.5)!important;}", "button[style*='color:#fff']{font-weight:600;letter-spacing:0px;box-shadow:0 4px 12px rgba(0,0,0,0.3);}", "button[style*='color:#fff']:hover{box-shadow:0 8px 24px rgba(249,115,22,0.25);}", "[style*='display:flex'][style*='gap:10'],[style*='display:flex'][style*='gap:12'],[style*='display:flex'][style*='gap:16']{align-items:center;}", "[style*='gridTemplateColumns:1fr 1fr'] button[style*='background:'][style*='borderRadius']{transition:all 0.2s ease;}", "[style*='gridTemplateColumns:1fr 1fr'] button[style*='background:']:active{transform:scale(0.96);}", "button[style*='width: 20px'],button[style*='width: 24px'],button[style*='width: 26px'],button[style*='width: 28px'],button[style*='width: 30px'],button[style*='width: 32px'],button[style*='width: 34px'],button[style*='width: 36px'],button[style*='width: 38px'],button[style*='width: 40px']{min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;}", "div[role='button'][style*='width: 20px'],div[role='button'][style*='width: 24px'],div[role='button'][style*='width: 28px'],div[role='button'][style*='width: 32px'],div[role='button'][style*='width: 36px'],div[role='button'][style*='width: 40px']{min-width:44px;min-height:44px;}", "@keyframes overlayIn{from{opacity:0}to{opacity:1}}", "@keyframes pillIn{from{opacity:0;transform:scale(0.85)}to{opacity:1;transform:scale(1)}}", "@keyframes cardRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}", "@keyframes dotSpring{0%{transform:scale(0)}60%{transform:scale(1.3)}100%{transform:scale(1)}}", "[style*='var(--glass-bar)']{backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 8px 24px var(--color-shadow-light);}", "nav button:hover{transform:none;box-shadow:none;}", "nav button:active{transform:scale(0.92);}", "nav button:focus:not(:focus-visible){box-shadow:none;}", "[style*='bottom: 80px'][style*='position: fixed']{bottom:calc(80px + env(safe-area-inset-bottom, 0px))!important;}", "[style*='padding-bottom: 80px']{padding-bottom:calc(80px + env(safe-area-inset-bottom, 0px))!important;}", "[style*='padding-bottom: 100px']{padding-bottom:calc(100px + env(safe-area-inset-bottom, 0px))!important;}", "[style*='padding-bottom: 160px']{padding-bottom:calc(160px + env(safe-area-inset-bottom, 0px))!important;}", "[style*='linear-gradient(rgba(249, 115, 22, 0.094)'],[style*='linear-gradient(rgba(249, 115, 22, 0.125)'],[style*='linear-gradient(rgba(249, 115, 22, 0.18)']{background:none!important;}", "button[style*='background: transparent'][style*='var(--color-border)']{background:rgba(120,120,128,0.16)!important;border-color:transparent!important;}", "[style*='background: var(--color-card)'][style*='padding: 13px'],[style*='background: var(--color-card)'][style*='padding: 12px 14px'],[style*='background: var(--color-card)'][style*='padding: 13px 14px'],[style*='background: var(--color-card)'][style*='padding: 14px']{padding:16px!important;}", "[style*='background: var(--color-card)'][style*='padding: 15px']{padding:17px 16px!important;}", "[style*='background: var(--color-card)'][style*='border-radius: 12px'],[style*='background: var(--color-card)'][style*='border-radius: 13px'],[style*='background: var(--color-card)'][style*='border-radius: 14px'],[style*='background: var(--color-card)'][style*='border-radius: 16px']{border-radius:16px!important;box-shadow:0 1px 2px var(--color-shadow-light),0 6px 20px var(--color-shadow-light)!important;}", "[style*='1px solid var(--color-border)']{border-width:0.5px!important;}", "button[style*='border-radius: 9px'],button[style*='border-radius: 10px'],button[style*='border-radius: 11px']{border-radius:12px!important;}", "button[style*='border-radius: 12px'],button[style*='border-radius: 13px'],button[style*='border-radius: 14px']{border-radius:14px!important;}", "button[style*='linear-gradient']{border-radius:14px!important;box-shadow:0 2px 6px rgba(249,115,22,0.25),0 8px 22px rgba(249,115,22,0.22)!important;}", "input[style*='border-radius'],textarea[style*='border-radius'],select[style*='border-radius']{border-radius:12px!important;}", "[style*='padding: 52px 20px'] h1{font-size:32px!important;letter-spacing:-0.01em!important;}", "[style*='padding: 52px 20px']{padding-top:max(58px, calc(env(safe-area-inset-top, 0px) + 10px))!important;}", "p{line-height:1.45;}", "h1,h2{line-height:1.15;}", "p[style*='font-size: 11px'][style*='letter-spacing']{opacity:0.85;}", "[style*='border-radius: 22px 22px 0px 0px'],[style*='border-radius: 24px 24px 0px 0px']{border-radius:24px 24px 0 0!important;}", "html.theme-slate,html[data-style-profile='slate']{--glass-bar:rgba(13,17,23,0.85);--color-bg:#0D1117;--color-surface:#161B22;--color-card:#21262D;--color-border:rgba(48,54,61,0.9);--color-text:#E6EDF3;--color-text-muted:#A3ADB8;--color-text-subtle:#2D333B;--color-shadow:rgba(1,4,9,0.4);--color-shadow-light:rgba(1,4,9,0.15);}", "html.theme-slate body,html[data-style-profile='slate'] body{background:#0D1117!important;}", "html.theme-slate nav,html[data-style-profile='slate'] nav{background:rgba(13,17,23,0.85)!important;border-top:1px solid rgba(48,54,61,0.7)!important;}", "html.theme-slate [style*='rgba(8, 8, 9']{background-color:rgba(13,17,23,0.92)!important;}", "html.theme-slate input[style*='background'],html[data-style-profile='slate'] input[style*='background']{background-color:rgba(33,38,45,0.95)!important;border-color:rgba(48,54,61,0.9)!important;color:#E6EDF3!important;}", "html.theme-slate textarea,html[data-style-profile='slate'] textarea{background-color:rgba(33,38,45,0.95)!important;border-color:rgba(48,54,61,0.9)!important;color:#E6EDF3!important;}", "html.theme-slate select,html[data-style-profile='slate'] select{background-color:rgba(33,38,45,0.95)!important;border-color:rgba(48,54,61,0.9)!important;color:#E6EDF3!important;}", "html.theme-navy,html[data-style-profile='navy']{--glass-bar:rgba(7,15,30,0.88);--color-bg:#070F1E;--color-surface:#0C1829;--color-card:#112035;--color-border:rgba(56,139,253,0.12);--color-text:#E0EFFF;--color-text-muted:#6B91BE;--color-text-subtle:#142035;--color-shadow:rgba(0,4,15,0.5);--color-shadow-light:rgba(0,4,15,0.18);}", "html.theme-navy body,html[data-style-profile='navy'] body{background:#070F1E!important;}", "html.theme-navy nav,html[data-style-profile='navy'] nav{background:rgba(7,15,30,0.88)!important;border-top:1px solid rgba(56,139,253,0.12)!important;}", "html.theme-navy [style*='rgba(8, 8, 9']{background-color:rgba(7,15,30,0.92)!important;}", "html.theme-navy input[style*='background'],html[data-style-profile='navy'] input[style*='background']{background-color:rgba(17,32,53,0.95)!important;border-color:rgba(56,139,253,0.18)!important;color:#E0EFFF!important;}", "html.theme-navy textarea,html[data-style-profile='navy'] textarea{background-color:rgba(17,32,53,0.95)!important;border-color:rgba(56,139,253,0.18)!important;color:#E0EFFF!important;}", "html.theme-navy select,html[data-style-profile='navy'] select{background-color:rgba(17,32,53,0.95)!important;border-color:rgba(56,139,253,0.18)!important;color:#E0EFFF!important;}", "html.theme-midnight,html[data-style-profile='midnight']{--glass-bar:rgba(12,9,23,0.88);--color-bg:#0C0917;--color-surface:#14102A;--color-card:#1C183A;--color-border:rgba(139,92,246,0.14);--color-text:#EDE9FE;--color-text-muted:#A79BCC;--color-text-subtle:#201A3D;--color-shadow:rgba(0,0,0,0.45);--color-shadow-light:rgba(0,0,0,0.18);}", "html.theme-midnight body,html[data-style-profile='midnight'] body{background:#0C0917!important;}", "html.theme-midnight nav,html[data-style-profile='midnight'] nav{background:rgba(12,9,23,0.88)!important;border-top:1px solid rgba(139,92,246,0.14)!important;}", "html.theme-midnight [style*='rgba(8, 8, 9']{background-color:rgba(12,9,23,0.92)!important;}", "html.theme-midnight input[style*='background'],html[data-style-profile='midnight'] input[style*='background']{background-color:rgba(28,24,58,0.95)!important;border-color:rgba(139,92,246,0.18)!important;color:#EDE9FE!important;}", "html.theme-midnight textarea,html[data-style-profile='midnight'] textarea{background-color:rgba(28,24,58,0.95)!important;border-color:rgba(139,92,246,0.18)!important;color:#EDE9FE!important;}", "html.theme-midnight select,html[data-style-profile='midnight'] select{background-color:rgba(28,24,58,0.95)!important;border-color:rgba(139,92,246,0.18)!important;color:#EDE9FE!important;}"].join("");
+var CSS = ["*{box-sizing:border-box;margin:0;padding:0;}", "html{color-scheme:dark light;--color-bg:#000000;--color-surface:#0D0D0F;--color-card:#1C1C1E;--color-border:rgba(255,255,255,0.09);--color-text:#F5F5F7;--color-text-muted:#A1A1AA;--color-text-subtle:#2C2C2E;--color-accent:#F97316;--color-accent-dark:#7C3A0E;--color-success:#22C55E;--color-success-deep:#178841;--color-error:#F05151;--color-info:#4186F6;--color-shadow:rgba(0,0,0,0.5);--color-shadow-light:rgba(0,0,0,0.18);--color-warning:#F59E0B;--color-feature:#8B5CF6;--color-macro-protein:#3B82F6;--color-macro-carbs:#F59E0B;--color-macro-fat:#EC4899;--color-positive-alt:#10B981;--color-positive-alt-deep:#0C875E;--color-accent-deep:#C2410C;--color-accent-text:#FB923C;--color-accent-rgb:249,115,22;--color-text-tertiary:#8E8E93;--glass-bar:rgba(0,0,0,0.78);--color-fill1:#111113;--color-fill2:#18181B;--color-fill3:#2A2A2F;}", "html.light-mode,html[data-style-profile='light']{--color-bg:#F2F2F7;--color-surface:#F2F2F7;--color-card:#FFFFFF;--color-border:rgba(60,60,67,0.12);--color-text:#1C1C1E;--color-text-muted:#63636B;--color-text-subtle:#E5E5EA;--color-shadow:rgba(15,23,42,0.10);--color-shadow-light:rgba(15,23,42,0.06);--color-accent-text:#C2410C;--color-warning:#B45309;--color-success:#15803D;--color-success-deep:#15803D;--color-error:#DC2626;--color-info:#2563EB;--color-feature:#6D28D9;--color-macro-protein:#2563EB;--color-macro-carbs:#B45309;--color-macro-fat:#BE185D;--color-positive-alt:#047857;--color-positive-alt-deep:#046148;--color-text-tertiary:#86868B;--glass-bar:rgba(242,242,247,0.85);--color-fill1:#E4E6E9;--color-fill2:#F0F2F5;--color-fill3:#D4D8DF;}", "html.light-mode nav,html[data-style-profile='light'] nav{background:rgba(242,242,247,0.82)!important;}", "body{background:var(--color-bg);color:var(--color-text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;font-size:1.0625rem;line-height:1.5;transition:background-color 0.3s ease,color 0.3s ease;}", "::-webkit-scrollbar{display:none;}", "input,textarea,button,select{font-family:inherit;font-size:inherit;}", "input,textarea{-webkit-user-select:text;user-select:text;}", "@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}", "@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}", "@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}", "@keyframes slideDownBanner{from{transform:translateX(-50%) translateY(-100%)}to{transform:translateX(-50%) translateY(0)}}", "@keyframes slideFromTop{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}", "@keyframes shimmer{0%{background-position:-1000px 0}100%{background-position:1000px 0}}", "@keyframes tutFadeIn{from{opacity:0}to{opacity:1}}", "@keyframes tutFadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}", "@keyframes tutIconIn{0%{opacity:0;transform:scale(0.3)}55%{transform:scale(1.14)}80%{transform:scale(0.96)}100%{opacity:1;transform:scale(1)}}", "@keyframes tutPulseGlow{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:1;transform:scale(1.18)}}", "@keyframes tutGridMove{from{transform:translate(0,0)}to{transform:translate(40px,40px)}}", "@keyframes tutCursor{0%,100%{opacity:1}50%{opacity:0}}", "@keyframes tutCircleDraw{to{stroke-dashoffset:0}}", "@keyframes tutCheckDraw{to{stroke-dashoffset:0}}", "@keyframes lockBodyIn{0%{transform:scale(0.78);opacity:0}55%{transform:scale(1.06);opacity:1}78%{transform:scale(0.97)}100%{transform:scale(1)}}", "@keyframes lockShackleRotate{0%{transform:rotateZ(-82deg)}25%{transform:rotateZ(-95deg)}50%{transform:rotateZ(82deg)}75%{transform:rotateZ(8deg)}100%{transform:rotateZ(0deg)}}", "@keyframes lockShackleOpen{0%{transform:rotateZ(-85deg)}100%{transform:rotateZ(-85deg)}}", "@keyframes lockRingExpand{0%{transform:scale(0.4);opacity:0.85}100%{transform:scale(2.2);opacity:0}}", "@keyframes lockRingExpand2{0%{transform:scale(0.4);opacity:0.5}100%{transform:scale(2.8);opacity:0}}", "@keyframes lockFinalGlow{0%{filter:drop-shadow(0 0 0px transparent)}60%{filter:drop-shadow(0 0 24px rgba(249,115,22,0.85))}100%{filter:drop-shadow(0 0 10px rgba(249,115,22,0.35))}}", "@keyframes tutButtonGlow{0%,100%{box-shadow:0 0 30px rgba(249,115,22,0.45)}50%{box-shadow:0 0 60px rgba(249,115,22,0.85)}}", "@keyframes tutP1{to{opacity:0;transform:translate(-90px,-90px) scale(0)}}", "@keyframes tutP2{to{opacity:0;transform:translate(90px,-90px) scale(0)}}", "@keyframes tutP3{to{opacity:0;transform:translate(0,-120px) scale(0)}}", "@keyframes tutP4{to{opacity:0;transform:translate(120px,0) scale(0)}}", "@keyframes tutP5{to{opacity:0;transform:translate(-120px,0) scale(0)}}", "@keyframes tutP6{to{opacity:0;transform:translate(80px,90px) scale(0)}}", "@keyframes tutP7{to{opacity:0;transform:translate(-80px,90px) scale(0)}}", "@keyframes tutP8{to{opacity:0;transform:translate(50px,-130px) scale(0)}}", "@keyframes tutP9{to{opacity:0;transform:translate(-50px,-130px) scale(0)}}", "@keyframes tutP10{to{opacity:0;transform:translate(130px,50px) scale(0)}}", "@keyframes tutP11{to{opacity:0;transform:translate(-130px,50px) scale(0)}}", "@keyframes tutP12{to{opacity:0;transform:translate(0,130px) scale(0)}}", "@keyframes scalePopOut{0%{transform:scale(0.8);opacity:0}50%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}",
+/* ── Hold-menu motion ──────────────────────────────────────────────────
+   Apple's interface motion is spring-driven: a mass on a spring released
+   from rest, which overshoots slightly and settles, rather than a curve
+   that decelerates into its endpoint and stops dead. These easings are
+   sampled from an actual damped harmonic oscillator —
+     x(t) = 1 - e^(-zwt)(cos(w_d t) + (zw/w_d) sin(w_d t))
+   — at (response, damping) of (0.42, 0.62) for the card lifting out and
+   (0.34, 0.78) for the pills surfacing behind it. That is why the sample
+   lists run past 1.0 and come back: the overshoot IS the physics, and it
+   is what makes the gesture feel like weight moving rather than opacity
+   changing.
+
+   cubic-bezier cannot express overshoot at all — it is bounded by its
+   endpoints — so the springs need linear(). Browsers without it keep the
+   bezier below, which is the same motion minus the bounce. */
+"@supports (min-height:100dvh){[style*=\"min-height: 100vh\"]{min-height:100dvh!important;}[style*=\"height: calc(100vh\"]{height:calc(100dvh - 220px)!important;}}", "@keyframes bubblePop{from{opacity:0;transform:scale(0.84)}to{opacity:1;transform:scale(1)}}",
+"@keyframes bubbleRise{from{opacity:0;transform:translateY(14px) scale(0.92)}to{opacity:1;transform:translateY(0) scale(1)}}",
+"@keyframes bubbleOut{from{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(0.94)}}",
+"@keyframes veilIn{from{opacity:0}to{opacity:1}}",
+".lk-pop{animation:bubblePop .34s cubic-bezier(0.32,0.72,0,1) both;}",
+".lk-rise{animation:bubbleRise .3s cubic-bezier(0.32,0.72,0,1) both;}",
+".lk-out{animation:bubbleOut .17s cubic-bezier(0.4,0,1,1) both;}",
+".lk-veil{animation:veilIn .2s ease both;}",
+".lk-veil.lk-out{animation:veilIn .16s ease reverse both;}",
+"@supports (animation-timing-function:linear(0,1)){" +
+  ".lk-pop{animation-duration:.745s;animation-timing-function:linear(0,0.0764,0.2508,0.4585,0.6565,0.8211,0.9429,1.0226,1.0662,1.0826,1.0806,1.0681,1.0513,1.0341,1.0193,1.0079,1,0.9954,0.9934,0.9931,0.9939,0.9952,0.9967,0.998,0.9991,0.9998,1);}" +
+  ".lk-rise{animation-duration:.479s;animation-timing-function:linear(0,0.0656,0.2115,0.383,0.5478,0.6894,0.8019,0.8854,0.9436,0.9813,1.0037,1.0152,1.0195,1.0195,1.0172,1.0139,1.0105,1.0074,1.0049,1.003,1.0016,1.0007,1);}" +
+"}", "@keyframes glowPulse{0%,100%{box-shadow:0 0 20px rgba(249,115,22,0.4)}50%{box-shadow:0 0 40px rgba(249,115,22,0.8)}}", "@keyframes checkPulse{0%{transform:scale(1)}50%{transform:scale(1.3)}100%{transform:scale(1)}}", "@keyframes jiggle{0%,100%{transform:rotate(0deg)}25%{transform:rotate(-1.2deg)}75%{transform:rotate(1.2deg)}}", "@keyframes partialsFlash{0%{transform:scale(1)}40%{transform:scale(1.55);background:var(--color-accent);color:#fff;border-color:var(--color-accent)}100%{transform:scale(1)}}", "@keyframes spin{to{transform:rotate(360deg)}}", "@keyframes progressArc{from{stroke-dashoffset:565}to{stroke-dashoffset:0}}", "/* ── Design system v3 ────────────────────────────────────────────────    Apple-style composition layer: grouped surfaces, a real type scale and    a spacing rhythm. Colours above are unchanged so nothing regresses;    these are additive tokens the DS primitives consume. */ :root {   /* grouped-inset surfaces (iOS Settings / Health pattern) */   --ds-grouped: #000000;   --ds-elevated: #1C1C1E;   --ds-elevated-2: #2C2C2E;   --ds-separator: rgba(84,84,88,0.34);   --ds-fill: rgba(120,120,128,0.20);   --ds-fill-soft: rgba(120,120,128,0.12);   --ds-material: rgba(30,30,32,0.72);    /* type scale */   --ds-t-large: 34px;   /* large title */   --ds-t-title: 26px;   --ds-t-head: 20px;   --ds-t-body: 16px;   --ds-t-sub: 15px;   --ds-t-foot: 13px;   --ds-t-cap: 12px;   --ds-t-cap2: 11px;    /* spacing rhythm */   --ds-s1: 4px;  --ds-s2: 8px;  --ds-s3: 12px;   --ds-s4: 16px; --ds-s5: 20px; --ds-s6: 24px; --ds-s8: 32px;    /* radii */   --ds-r-sm: 10px; --ds-r-md: 14px; --ds-r-lg: 18px; --ds-r-xl: 22px; } html.light-mode {   --ds-grouped: #F2F2F7;   --ds-elevated: #FFFFFF;   --ds-elevated-2: #F2F2F7;   --ds-separator: rgba(60,60,67,0.20);   --ds-fill: rgba(120,120,128,0.16);   --ds-fill-soft: rgba(120,120,128,0.08);   --ds-material: rgba(255,255,255,0.78); }  /* Numerals line up in columns wherever they're compared */ .ds-num { font-variant-numeric: tabular-nums; }  /* Grouped list: rows separated by inset hairlines, not boxed individually */ .ds-list > * + * { border-top: 0.5px solid var(--ds-separator); }  /* Large title that settles as you scroll */ .ds-largetitle {   font-family: \"Barlow Condensed\", sans-serif;   font-size: var(--ds-t-large);   font-weight: 800;   letter-spacing: 0.02em;   line-height: 1.05;   color: var(--color-text);   margin: 0; } .ds-section-hd {   font-size: var(--ds-t-cap2);   font-weight: 600;   letter-spacing: 0.06em;   text-transform: uppercase;   color: var(--color-text-muted);   margin: 0 0 var(--ds-s2);   padding-left: var(--ds-s1); } @media (prefers-reduced-motion: reduce) {   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } } ", "html.theme-slate,html[data-style-profile='slate']{--ds-grouped:#0D1117;--ds-elevated:#21262D;--ds-elevated-2:#2D333B;--ds-sep:rgba(48,54,61,0.9);--ds-fill:rgba(139,148,158,0.16);--ds-fill-soft:rgba(139,148,158,0.09);--ds-material:rgba(13,17,23,0.72);}", "html.theme-navy,html[data-style-profile='navy']{--ds-grouped:#070F1E;--ds-elevated:#112035;--ds-elevated-2:#16294280;--ds-sep:rgba(56,139,253,0.14);--ds-fill:rgba(107,145,190,0.16);--ds-fill-soft:rgba(107,145,190,0.09);--ds-material:rgba(7,15,30,0.75);}", "html.theme-midnight,html[data-style-profile='midnight']{--ds-grouped:#0C0917;--ds-elevated:#1C183A;--ds-elevated-2:#241E47;--ds-sep:rgba(139,92,246,0.16);--ds-fill:rgba(167,155,204,0.16);--ds-fill-soft:rgba(167,155,204,0.09);--ds-material:rgba(12,9,23,0.75);}", "@media (prefers-reduced-motion:reduce){*{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}}", "[style*='color: var(--color-accent)']{color:var(--color-accent-text)!important;}", "[style*='color: rgb(249, 115, 22)']{color:var(--color-accent-text)!important;}", "button[style*='background: var(--color-accent)'][style*='color: rgb(255, 255, 255)'],button[style*='background: var(--color-accent)'][style*='color: #fff']{background:var(--color-accent-deep)!important;}", "@media (prefers-reduced-transparency:reduce){nav,[style*='backdrop-filter'],[style*='var(--glass-bar)'],[style*='rgba(8, 8, 9']{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:var(--color-surface)!important;}}", "button,a,[role=button]{transition:transform .15s ease-out,box-shadow .15s ease-out,background-color .2s ease,color .2s ease,border-color .2s ease,opacity .2s ease;}", "@media (hover:hover) and (pointer:fine){button:hover,a:hover,[role=button]:hover{transform:translateY(-1px);box-shadow:0 4px 14px var(--color-shadow);}}", "button:active,[role=button]:active{transform:scale(0.97);transition-duration:.08s;box-shadow:0 1px 4px var(--color-shadow);}", "button:focus,a:focus,[role=button]:focus{outline:none;box-shadow:inset 0 0 0 2px rgba(var(--color-accent-rgb),0.5);}", "input:focus,textarea:focus,select:focus{transition:all 0.2s ease;box-shadow:inset 0 0 0 2px rgba(var(--color-accent-rgb),0.4),0 0 0 3px rgba(var(--color-accent-rgb),0.1);}", "[style*='background']{transition:background-color 0.24s ease,box-shadow 0.24s ease;}", "p{line-height:1.6;}", "[style*='border-radius'][style*='cursor: pointer']:hover{box-shadow:0 4px 16px var(--color-shadow);}", "h1,h2,h3,h4,h5,h6{font-weight:700;line-height:1.2;}", "[style*='border:1px']{transition:all 0.24s ease;border-color:rgba(36,36,40,0.8);}", "html.light-mode [style*='border:1px'],html[data-style-profile='light'] [style*='border:1px']{border-color:rgba(60,60,67,0.12)!important;}", "button:disabled{opacity:0.4;cursor:not-allowed;transform:none;}", "button,[role=button]{position:relative;}", "input:not([type=checkbox]):not([type=radio]),select{min-height:44px;}", "button::after,[role=button]::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:max(100%,44px);height:max(100%,44px);}", "input::placeholder,textarea::placeholder{color:var(--color-text-tertiary);font-weight:400;}", "html.light-mode input::placeholder,html.light-mode textarea::placeholder{color:rgba(79,101,138,0.6);}", "html.light-mode input,html[data-style-profile='light'] input{background-color:#EFEFF4!important;border-color:rgba(60,60,67,0.16)!important;color:#1C1C1E!important;}", "html.light-mode input[style*='background:'][style*='color:'],html[data-style-profile='light'] input[style*='background:'][style*='color:']{background-color:#EFEFF4!important;color:#1C1C1E!important;border-color:rgba(60,60,67,0.16)!important;}", "html.light-mode textarea,html[data-style-profile='light'] textarea{background-color:#EFEFF4!important;border-color:rgba(60,60,67,0.16)!important;color:#1C1C1E!important;}", "html.light-mode select,html[data-style-profile='light'] select{background-color:#EFEFF4!important;border-color:rgba(60,60,67,0.16)!important;color:#1C1C1E!important;}", "html.light-mode [style*='color:#fff'],html[data-style-profile='light'] [style*='color:#fff']{color:#1C1C1E!important;}", "html.light-mode [style*='background:#111'],html[data-style-profile='light'] [style*='background:#111']{background:#E4E6E9!important;}", "html.light-mode [style*='border:'],html[data-style-profile='light'] [style*='border:']{border-color:#C8CDD6!important;}", "html.light-mode [style*='rgba(8, 8, 9']{background-color:rgba(242,242,247,0.92)!important;}", "html.light-mode button[style*='borderRadius:13'][style*='padding:14px'],html[data-style-profile='light'] button[style*='borderRadius:13'][style*='padding:14px']{background-color:#F0F2F5!important;border-color:#C8CDD6!important;}", "nav{background:rgba(8,8,9,0.8);border-top:1px solid rgba(36,36,40,0.5);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);}", "[style*='box-shadow']:not([style*='none']){box-shadow:0 4px 14px var(--color-shadow)!important;}", "[style*='borderRadius:12'],[style*='borderRadius:10'],[style*='borderRadius:8']{background-color:inherit;border:1px solid rgba(36,36,40,0.8);}", "html.light-mode [style*='borderRadius:12'],html.light-mode [style*='borderRadius:10'],html.light-mode [style*='borderRadius:8']{border-color:#C8CDD6!important;}", "[style*='background:linear-gradient']{box-shadow:0 8px 24px rgba(249,115,22,0.15);}", "input[style*='background']{background-color:rgba(24,24,27,0.8)!important;border:1px solid rgba(36,36,40,0.8)!important;color:#F5F5F5!important;}", "html.light-mode input[style*='background'],html[data-style-profile='light'] input[style*='background']{background-color:#F0F2F5!important;border:1px solid #C8CDD6!important;color:#0F172A!important;}", "input[style*='background']:focus{background-color:rgba(24,24,27,0.95)!important;border-color:rgba(249,115,22,0.5)!important;}", "button[style*='color:#fff']{font-weight:600;letter-spacing:0px;box-shadow:0 4px 12px rgba(0,0,0,0.3);}", "button[style*='color:#fff']:hover{box-shadow:0 8px 24px rgba(249,115,22,0.25);}", "[style*='display:flex'][style*='gap:10'],[style*='display:flex'][style*='gap:12'],[style*='display:flex'][style*='gap:16']{align-items:center;}", "[style*='gridTemplateColumns:1fr 1fr'] button[style*='background:'][style*='borderRadius']{transition:all 0.2s ease;}", "[style*='gridTemplateColumns:1fr 1fr'] button[style*='background:']:active{transform:scale(0.96);}", "button[style*='width: 20px'],button[style*='width: 24px'],button[style*='width: 26px'],button[style*='width: 28px'],button[style*='width: 30px'],button[style*='width: 32px'],button[style*='width: 34px'],button[style*='width: 36px'],button[style*='width: 38px'],button[style*='width: 40px']{min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;}", "div[role='button'][style*='width: 20px'],div[role='button'][style*='width: 24px'],div[role='button'][style*='width: 28px'],div[role='button'][style*='width: 32px'],div[role='button'][style*='width: 36px'],div[role='button'][style*='width: 40px']{min-width:44px;min-height:44px;}", "@keyframes overlayIn{from{opacity:0}to{opacity:1}}", "@keyframes pillIn{from{opacity:0;transform:scale(0.85)}to{opacity:1;transform:scale(1)}}", "@keyframes cardRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}", "@keyframes dotSpring{0%{transform:scale(0)}60%{transform:scale(1.3)}100%{transform:scale(1)}}", "[style*='var(--glass-bar)']{backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 8px 24px var(--color-shadow-light);}", "nav button:hover{transform:none;box-shadow:none;}", "nav button:active{transform:scale(0.92);}", "nav button:focus:not(:focus-visible){box-shadow:none;}", "[style*='bottom: 80px'][style*='position: fixed']{bottom:calc(80px + env(safe-area-inset-bottom, 0px))!important;}", "[style*='padding-bottom: 80px']{padding-bottom:calc(80px + env(safe-area-inset-bottom, 0px))!important;}", "[style*='padding-bottom: 100px']{padding-bottom:calc(100px + env(safe-area-inset-bottom, 0px))!important;}", "[style*='padding-bottom: 160px']{padding-bottom:calc(160px + env(safe-area-inset-bottom, 0px))!important;}", "[style*='linear-gradient(rgba(249, 115, 22, 0.094)'],[style*='linear-gradient(rgba(249, 115, 22, 0.125)'],[style*='linear-gradient(rgba(249, 115, 22, 0.18)']{background:none!important;}", "button[style*='background: transparent'][style*='var(--color-border)']{background:rgba(120,120,128,0.16)!important;border-color:transparent!important;}", "[style*='background: var(--color-card)'][style*='padding: 13px'],[style*='background: var(--color-card)'][style*='padding: 12px 14px'],[style*='background: var(--color-card)'][style*='padding: 13px 14px'],[style*='background: var(--color-card)'][style*='padding: 14px']{padding:16px!important;}", "[style*='background: var(--color-card)'][style*='padding: 15px']{padding:17px 16px!important;}", "[style*='background: var(--color-card)'][style*='border-radius: 12px'],[style*='background: var(--color-card)'][style*='border-radius: 13px'],[style*='background: var(--color-card)'][style*='border-radius: 14px'],[style*='background: var(--color-card)'][style*='border-radius: 16px']{border-radius:16px!important;box-shadow:0 1px 2px var(--color-shadow-light),0 6px 20px var(--color-shadow-light)!important;}", "[style*='1px solid var(--color-border)']{border-width:0.5px!important;}", "button[style*='border-radius: 9px'],button[style*='border-radius: 10px'],button[style*='border-radius: 11px']{border-radius:12px!important;}", "button[style*='border-radius: 12px'],button[style*='border-radius: 13px'],button[style*='border-radius: 14px']{border-radius:14px!important;}", "button[style*='linear-gradient']{border-radius:14px!important;box-shadow:0 2px 6px rgba(249,115,22,0.25),0 8px 22px rgba(249,115,22,0.22)!important;}", "input[style*='border-radius'],textarea[style*='border-radius'],select[style*='border-radius']{border-radius:12px!important;}", "[style*='padding: 52px 20px'] h1{font-size:32px!important;letter-spacing:-0.01em!important;}", "[style*='padding: 52px 20px']{padding-top:max(58px, calc(env(safe-area-inset-top, 0px) + 10px))!important;}", "p{line-height:1.45;}", "h1,h2{line-height:1.15;}", "p[style*='font-size: 11px'][style*='letter-spacing']{opacity:0.85;}", "[style*='border-radius: 22px 22px 0px 0px'],[style*='border-radius: 24px 24px 0px 0px']{border-radius:24px 24px 0 0!important;}", "html.theme-slate,html[data-style-profile='slate']{--glass-bar:rgba(13,17,23,0.85);--color-bg:#0D1117;--color-surface:#161B22;--color-card:#21262D;--color-border:rgba(48,54,61,0.9);--color-text:#E6EDF3;--color-text-muted:#A3ADB8;--color-text-subtle:#2D333B;--color-shadow:rgba(1,4,9,0.4);--color-shadow-light:rgba(1,4,9,0.15);}", "html.theme-slate body,html[data-style-profile='slate'] body{background:#0D1117!important;}", "html.theme-slate nav,html[data-style-profile='slate'] nav{background:rgba(13,17,23,0.85)!important;border-top:1px solid rgba(48,54,61,0.7)!important;}", "html.theme-slate [style*='rgba(8, 8, 9']{background-color:rgba(13,17,23,0.92)!important;}", "html.theme-slate input[style*='background'],html[data-style-profile='slate'] input[style*='background']{background-color:rgba(33,38,45,0.95)!important;border-color:rgba(48,54,61,0.9)!important;color:#E6EDF3!important;}", "html.theme-slate textarea,html[data-style-profile='slate'] textarea{background-color:rgba(33,38,45,0.95)!important;border-color:rgba(48,54,61,0.9)!important;color:#E6EDF3!important;}", "html.theme-slate select,html[data-style-profile='slate'] select{background-color:rgba(33,38,45,0.95)!important;border-color:rgba(48,54,61,0.9)!important;color:#E6EDF3!important;}", "html.theme-navy,html[data-style-profile='navy']{--glass-bar:rgba(7,15,30,0.88);--color-bg:#070F1E;--color-surface:#0C1829;--color-card:#112035;--color-border:rgba(56,139,253,0.12);--color-text:#E0EFFF;--color-text-muted:#6B91BE;--color-text-subtle:#142035;--color-shadow:rgba(0,4,15,0.5);--color-shadow-light:rgba(0,4,15,0.18);}", "html.theme-navy body,html[data-style-profile='navy'] body{background:#070F1E!important;}", "html.theme-navy nav,html[data-style-profile='navy'] nav{background:rgba(7,15,30,0.88)!important;border-top:1px solid rgba(56,139,253,0.12)!important;}", "html.theme-navy [style*='rgba(8, 8, 9']{background-color:rgba(7,15,30,0.92)!important;}", "html.theme-navy input[style*='background'],html[data-style-profile='navy'] input[style*='background']{background-color:rgba(17,32,53,0.95)!important;border-color:rgba(56,139,253,0.18)!important;color:#E0EFFF!important;}", "html.theme-navy textarea,html[data-style-profile='navy'] textarea{background-color:rgba(17,32,53,0.95)!important;border-color:rgba(56,139,253,0.18)!important;color:#E0EFFF!important;}", "html.theme-navy select,html[data-style-profile='navy'] select{background-color:rgba(17,32,53,0.95)!important;border-color:rgba(56,139,253,0.18)!important;color:#E0EFFF!important;}", "html.theme-midnight,html[data-style-profile='midnight']{--glass-bar:rgba(12,9,23,0.88);--color-bg:#0C0917;--color-surface:#14102A;--color-card:#1C183A;--color-border:rgba(139,92,246,0.14);--color-text:#EDE9FE;--color-text-muted:#A79BCC;--color-text-subtle:#201A3D;--color-shadow:rgba(0,0,0,0.45);--color-shadow-light:rgba(0,0,0,0.18);}", "html.theme-midnight body,html[data-style-profile='midnight'] body{background:#0C0917!important;}", "html.theme-midnight nav,html[data-style-profile='midnight'] nav{background:rgba(12,9,23,0.88)!important;border-top:1px solid rgba(139,92,246,0.14)!important;}", "html.theme-midnight [style*='rgba(8, 8, 9']{background-color:rgba(12,9,23,0.92)!important;}", "html.theme-midnight input[style*='background'],html[data-style-profile='midnight'] input[style*='background']{background-color:rgba(28,24,58,0.95)!important;border-color:rgba(139,92,246,0.18)!important;color:#EDE9FE!important;}", "html.theme-midnight textarea,html[data-style-profile='midnight'] textarea{background-color:rgba(28,24,58,0.95)!important;border-color:rgba(139,92,246,0.18)!important;color:#EDE9FE!important;}", "html.theme-midnight select,html[data-style-profile='midnight'] select{background-color:rgba(28,24,58,0.95)!important;border-color:rgba(139,92,246,0.18)!important;color:#EDE9FE!important;}"].join("");
 (function migrateWeightsToKg() {
   try {
     if (ld("weightsKgMigrated", false)) return;
@@ -3878,6 +3916,16 @@ function convToKg(v, useKg) {
   if (isNaN(n)) return 0;
   return useKg ? n : n / 2.20462;
 }
+/* Shopping rows come from three places — typed by hand, generated by the AI
+   meal planner, and whatever an older build of the app left in storage. A row
+   missing itemName used to throw on .toLowerCase() and take the whole
+   Shopping tab down with it, so every comparison goes through here: tolerant
+   of the missing field, and still matching legacy rows that stored `name`. */
+function lcName(x) {
+  if (x == null) return "";
+  if (typeof x === "string") return x.toLowerCase().trim();
+  return String(x.itemName != null ? x.itemName : (x.name != null ? x.name : "")).toLowerCase().trim();
+}
 function getEx(id) {
   for (var i = 0; i < ALL_EX.length; i++) {
     if (ALL_EX[i].id === id) return ALL_EX[i];
@@ -4724,6 +4772,12 @@ function ExerciseActionSheet(p) {
   var items = p.items || [];
   var boxRef = useRef(null);
   var [top, setTop] = useState(null);
+  var [closing, setClosing] = useState(false);
+  var closeTimer = useRef(null);
+  /* Mirrored in a ref because dismiss() is reached from a listener registered
+     once; reading the state variable there would see the first render's value
+     forever. */
+  var closingRef = useRef(false);
 
   /* Sit the bubble where the card was, nudged only as far as it must be to
      fit on screen — the point of the gesture is that the thing you pressed
@@ -4738,20 +4792,42 @@ function ExerciseActionSheet(p) {
     setTop(max < 16 ? 16 : Math.max(16, Math.min(want, max)));
   }, [p.rect, items.length]);
 
+  /* Dismissal plays out before the tree unmounts, so the menu settles back
+     rather than blinking away. Selecting an action runs it on the way out —
+     the result should already be on screen when the blur clears. */
+  function dismiss(then) {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    setClosing(true);
+    closeTimer.current = setTimeout(function () {
+      if (then) then();
+      p.onClose();
+    }, 170);
+  }
+
+  /* Runs once. Depending on `closing` here would tear the effect down the
+     moment dismissal starts and clear the timer that finishes it. */
   useEffect(function () {
-    function onKey(e) { if (e.key === "Escape") p.onClose(); }
+    function onKey(e) { if (e.key === "Escape") dismiss(); }
     document.addEventListener("keydown", onKey);
     var prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return function () {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
+      if (closeTimer.current) clearTimeout(closeTimer.current);
     };
   }, []);
+
+  /* Grow from where the finger landed, not from the middle of the card. */
+  var originX = p.rect && p.rect.width
+    ? Math.round(Math.max(0, Math.min(1, (p.rect.pressX - p.rect.left) / p.rect.width)) * 100)
+    : 50;
 
   return React.createElement("div", {
     role: "dialog",
     "aria-label": "Exercise actions",
+    className: "lk-veil" + (closing ? " lk-out" : ""),
     style: {
       position: "fixed",
       top: 0,
@@ -4762,13 +4838,21 @@ function ExerciseActionSheet(p) {
       background: "rgba(0,0,0,0.42)",
       backdropFilter: "blur(14px) saturate(140%)",
       WebkitBackdropFilter: "blur(14px) saturate(140%)",
-      animation: "overlayIn .22s ease",
       overflowY: "auto"
     }
-  }, React.createElement("div", {
-    onClick: p.onClose,
+  }, React.createElement("button", {
+    type: "button",
+    onClick: function () { dismiss(); },
     "aria-label": "Dismiss",
-    style: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }
+    style: {
+      position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+      background: "transparent", border: "none", padding: 0, cursor: "default",
+      /* The global `button:active { transform: scale(0.97) }` shrinks this
+         layer the moment it is pressed. On a full-bleed target that moves the
+         edges inward by ~6px, so a press near the edge releases outside the
+         button and the tap is lost. Inline beats the stylesheet. */
+      transform: "none"
+    }
   }), React.createElement("div", {
     ref: boxRef,
     style: {
@@ -4791,9 +4875,9 @@ function ExerciseActionSheet(p) {
       border: "1px solid " + BORD,
       padding: "14px 16px",
       boxShadow: "0 18px 50px rgba(0,0,0,0.55)",
-      animation: "bubblePop .26s cubic-bezier(0.32,0.72,0,1)",
-      transformOrigin: "center top"
-    }
+      transformOrigin: originX + "% 50%"
+    },
+    className: closing ? "lk-out" : "lk-pop"
   }, React.createElement("p", {
     style: { fontSize: "1rem", fontWeight: 800, color: TX, lineHeight: 1.25 }
   }, p.title), p.subtitle && React.createElement("p", {
@@ -4806,7 +4890,8 @@ function ExerciseActionSheet(p) {
     var col = it.color || TX;
     return React.createElement("button", {
       key: it.id,
-      onClick: function () { p.onSelect(it); },
+      className: closing ? "lk-out" : "lk-rise",
+      onClick: function () { dismiss(function () { p.onSelect(it); }); },
       style: {
         display: "flex",
         alignItems: "center",
@@ -4824,8 +4909,9 @@ function ExerciseActionSheet(p) {
         fontWeight: 600,
         cursor: "pointer",
         boxShadow: "0 6px 18px rgba(0,0,0,0.35)",
-        animation: "bubbleRise .3s cubic-bezier(0.32,0.72,0,1) both",
-        animationDelay: (0.03 + i * 0.035).toFixed(3) + "s"
+        /* Staggered so they read as surfacing one after another out of the
+           card, the way a stack settles rather than a list appearing. */
+        animationDelay: closing ? "0s" : (0.02 + i * 0.03).toFixed(3) + "s"
       }
     }, React.createElement(Ic, { d: it.icon, z: 17, c: col }), it.label);
   }))));
@@ -7377,11 +7463,42 @@ function WorkoutLog(p) {
      Press and hold anywhere on an exercise card except the drag handle (which
      still starts a reorder) and its own controls. Movement or an early release
      cancels, so scrolling past a card never fires it. */
-  function releaseHold() {
+  /* A near-critically-damped spring (response 0.30, damping 0.90) for the
+     press-down squeeze — it should compress under the finger and stop, with
+     no bounce. Browsers without linear() get the closest bezier. */
+  var PRESS_EASE = (function () {
+    var spring = "linear(0,0.0864,0.261,0.4464,0.6083,0.7358,0.8295,0.8948,0.9383,0.9659,0.9827,0.9924,0.9977,1.0002,1.0013,1.0015,1)";
+    try {
+      if (window.CSS && CSS.supports && CSS.supports("transition-timing-function", spring)) return spring;
+    } catch (e) {}
+    return "cubic-bezier(0.32,0.72,0,1)";
+  })();
+  function setPress(el, on) {
+    if (!el || !el.style) return;
+    if (on) {
+      /* Squeeze over the length of the hold, so the card visibly loads up
+         under the finger and the pop is the release of that tension. */
+      el.style.transition = "transform 420ms " + PRESS_EASE;
+      el.style.transform = "scale(0.965)";
+    } else {
+      el.style.transition = "transform 260ms " + PRESS_EASE;
+      el.style.transform = "scale(1)";
+      /* Drop the transform entirely once it is back at rest — a lingering
+         one leaves a stacking context on every card for no reason. */
+      setTimeout(function () {
+        if (el.style && el.style.transform === "scale(1)") {
+          el.style.transform = "";
+          el.style.transition = "";
+        }
+      }, 300);
+    }
+  }
+  function releaseHold(keepPress) {
     var h = holdRef.current;
     if (!h) return;
     holdRef.current = null;
     clearTimeout(h.timer);
+    if (!keepPress) setPress(h.el, false);
     document.removeEventListener("pointermove", h.move);
     document.removeEventListener("pointerup", h.end);
     document.removeEventListener("pointercancel", h.end);
@@ -7396,20 +7513,29 @@ function WorkoutLog(p) {
     var sx = e.clientX, sy = e.clientY;
     releaseHold();
     var h = {
+      el: el,
       move: function (ev) {
         if (Math.abs(ev.clientX - sx) > 10 || Math.abs(ev.clientY - sy) > 10) releaseHold();
       },
       end: function () { releaseHold(); }
     };
     h.timer = setTimeout(function () {
-      releaseHold();
-      if (navigator.vibrate) try { navigator.vibrate(30); } catch (err) {}
       var r = el.getBoundingClientRect();
-      setActionMenu({ ri: ri, rect: { top: r.top, height: r.height } });
+      /* Snap the squeeze off before the bubble takes over, so the two do not
+         animate against each other. */
+      el.style.transition = "";
+      el.style.transform = "";
+      releaseHold(true);
+      if (navigator.vibrate) try { navigator.vibrate(30); } catch (err) {}
+      setActionMenu({
+        ri: ri,
+        rect: { top: r.top, left: r.left, width: r.width, height: r.height, pressX: sx }
+      });
       sd("holdTipSeen", true);
       setHoldTipSeen(true);
     }, 420);
     holdRef.current = h;
+    setPress(el, true);
     document.addEventListener("pointermove", h.move, { passive: true });
     document.addEventListener("pointerup", h.end, { passive: true });
     document.addEventListener("pointercancel", h.end, { passive: true });
@@ -8711,10 +8837,7 @@ function WorkoutLog(p) {
     }(),
     items: actionItems(actionMenu.ri),
     onClose: function () { setActionMenu(null); },
-    onSelect: function (it) {
-      setActionMenu(null);
-      it.run();
-    }
+    onSelect: function (it) { it.run(); }
   }), restActive && React.createElement("div", {
     ref: bannerRef,
     style: {
@@ -8974,7 +9097,7 @@ function WorkoutLog(p) {
       justifyContent: "space-between",
       alignItems: "center"
     }
-  }, React.createElement("div", null, React.createElement("h1", {
+  }, React.createElement("div", null, React.createElement("h2", {
     style: {
       fontSize: "1.3125rem",
       fontWeight: 800
@@ -9712,6 +9835,7 @@ function WorkoutLog(p) {
           }
         }, setA.r || "—"), React.createElement("select", {
           value: setA.rir || "2",
+          "aria-label": "Set " + (si + 1) + " reps in reserve",
           onChange: function (e) {
             setVal(ri, si, "rir", e.target.value);
           },
@@ -10041,7 +10165,6 @@ function WorkoutLog(p) {
         fontSize: "0.625rem",
         fontWeight: 700,
         color: MU,
-        opacity: 0.75,
         border: "1px solid " + BORD,
         borderRadius: 999,
         padding: "3px 9px",
@@ -10240,6 +10363,7 @@ function WorkoutLog(p) {
           }
         }, set.rR || "--"), React.createElement("select", {
           value: set.rir,
+          "aria-label": "Set " + (si + 1) + " reps in reserve",
           onChange: function (e) {
             setVal(ri, si, "rir", e.target.value);
           },
@@ -10463,6 +10587,7 @@ function WorkoutLog(p) {
           }
         }, "+", set.partials, "P")), React.createElement("select", {
           value: set.rir,
+          "aria-label": "Set " + (si + 1) + " reps in reserve",
           onChange: function (e) {
             setVal(ri, si, "rir", e.target.value);
           },
@@ -14283,6 +14408,7 @@ function WorkoutDetail(p) {
           }
         }), React.createElement("select", {
           value: set.rir,
+          "aria-label": "Set " + (si + 1) + " reps in reserve",
           onChange: function (e) {
             setExSet(ei, si, "rir", e.target.value);
           },
@@ -28373,6 +28499,7 @@ function SettingsScreen(p) {
     onClick: function () {
       p.go("profile");
     },
+    "aria-label": "Back to profile",
     style: {
       background: "none",
       border: "none",
@@ -28755,6 +28882,7 @@ function SettingsScreen(p) {
     }
   }, "Display name"), React.createElement("input", {
     value: name,
+    "aria-label": "Display name",
     onChange: function (e) {
       setName(e.target.value);
     },
@@ -29093,7 +29221,8 @@ function SettingsScreen(p) {
         border: "none",
         cursor: "pointer",
         padding: 0,
-        opacity: isActive ? 1 : 0.7
+        /* not 0.7 — that drops the label under 4.5:1 */
+        opacity: isActive ? 1 : 0.8
       }
     }, React.createElement("div", {
       style: {
@@ -29176,6 +29305,9 @@ function SettingsScreen(p) {
       setPartialsEnabled(next);
       sd("hidePartials", !next);
     },
+    role: "switch",
+    "aria-checked": !!partialsEnabled,
+    "aria-label": "Partial reps",
     style: {
       width: 46,
       height: 26,
@@ -29226,6 +29358,9 @@ function SettingsScreen(p) {
       setGamingEnabled(next);
       sd("gamingLayer", next);
     },
+    role: "switch",
+    "aria-checked": !!gamingEnabled,
+    "aria-label": "Streaks and badges",
     style: {
       width: 46,
       height: 26,
@@ -29281,6 +29416,9 @@ function SettingsScreen(p) {
       setUnitConvEnabled(next);
       sd("unitConversion", next);
     },
+    role: "switch",
+    "aria-checked": !!unitConvEnabled,
+    "aria-label": "Unit conversion",
     style: {
       width: 46,
       height: 26,
@@ -29414,6 +29552,9 @@ function SettingsScreen(p) {
       sd("voiceEnabled", next);
       window.dispatchEvent(new Event("lockedVoiceToggle"));
     },
+    role: "switch",
+    "aria-checked": !!voiceEnabled,
+    "aria-label": "Microphone button",
     style: {
       width: 46,
       height: 26,
@@ -29484,6 +29625,9 @@ function SettingsScreen(p) {
       sd("perfTracking", !cur);
       window.location.reload();
     },
+    role: "switch",
+    "aria-checked": !!ld("perfTracking", false),
+    "aria-label": "Cycle logging",
     style: {
       width: 46,
       height: 26,
@@ -32865,10 +33009,11 @@ function SmartNutritionCard(p) {
       padding: "8px 16px",
       borderRadius: 999,
       border: "none",
-      background: loading ? EMD_H + "50" : EMD,
+      background: EMD_D,
       color: "#fff",
       fontSize: "0.75rem",
       fontWeight: 700,
+      opacity: loading ? 0.55 : 1,
       cursor: loading ? "default" : "pointer"
     }
   }, loading ? "..." : suggestion ? "New" : "Suggest"), React.createElement("button", {
@@ -33756,7 +33901,7 @@ function MealPlanFuelTab(p) {
       var name = (item.item || item.name || "").trim();
       if (!name) return;
       var exists = list.find(function (x) {
-        return x.itemName.toLowerCase().indexOf(name.toLowerCase().slice(0, 6)) >= 0;
+        return lcName(x).indexOf(lcName(name).slice(0, 6)) >= 0;
       });
       if (!exists) {
         var _mp = parseIngredient((item.amount && item.amount !== "qty" ? item.amount + " " : "") + name);
@@ -37099,7 +37244,7 @@ function RecipesTab(p) {
             var p2 = parseIngredient(r.ingredients[i]);
             var cl = getShoppingList();
             var ex = cl.find(function (x) {
-              return x.itemName.toLowerCase() === p2.name.toLowerCase() && x.unit === p2.unit;
+              return lcName(x) === lcName(p2.name) && x.unit === p2.unit;
             });
             if (ex) {
               ex.quantity = parseFloat(ex.quantity) + p2.quantity;
@@ -38460,7 +38605,7 @@ function ShoppingTab(p) {
   function findDuplicateItem(itemName) {
     var name = itemName.toLowerCase().trim();
     return list.find(function (item) {
-      return item.itemName.toLowerCase().trim() === name;
+      return lcName(item) === name;
     });
   }
   function addItem() {
@@ -38489,7 +38634,7 @@ function ShoppingTab(p) {
       var newQty = parseFloat(mergeDialog.existingQty) + parseFloat(mergeDialog.newQty);
       var currentList = getShoppingList();
       var idx = currentList.findIndex(function (x) {
-        return x.itemName.toLowerCase() === mergeDialog.itemName.toLowerCase();
+        return lcName(x) === lcName(mergeDialog);
       });
       if (idx >= 0) currentList[idx].quantity = newQty;
       saveShoppingList(currentList);
@@ -38588,7 +38733,7 @@ function ShoppingTab(p) {
     }
   }, FITNESS_PICKS.map(function (pick, i) {
     var alreadyIn = list.some(function (x) {
-      return x.itemName.toLowerCase() === pick.name.toLowerCase();
+      return lcName(x) === lcName(pick.name);
     });
     return React.createElement("button", {
       key: i,
@@ -39065,6 +39210,7 @@ function ShoppingTab(p) {
     type: "number",
     min: "1",
     value: quantity,
+    "aria-label": "Quantity",
     onChange: function (e) {
       setQuantity(e.target.value);
     },
@@ -39080,6 +39226,7 @@ function ShoppingTab(p) {
     }
   }), React.createElement("select", {
     value: unit,
+    "aria-label": "Unit",
     onChange: function (e) {
       setUnit(e.target.value);
     },
@@ -41063,7 +41210,7 @@ function MealPlannerTab() {
       var name = (item.item || item.name || "").trim();
       if (!name) return;
       var exists = list.find(function (x) {
-        return x.itemName.toLowerCase().indexOf(name.toLowerCase().slice(0, 6)) >= 0;
+        return lcName(x).indexOf(lcName(name).slice(0, 6)) >= 0;
       });
       if (!exists) {
         var _mp = parseIngredient((item.amount && item.amount !== "qty" ? item.amount + " " : "") + name);
@@ -41956,7 +42103,7 @@ function SuppReminderCard() {
         padding: "8px 16px",
         borderRadius: 9,
         border: "none",
-        background: GR,
+        background: GR_D,
         color: "#fff",
         fontSize: "0.75rem",
         fontWeight: 700,
@@ -42488,6 +42635,9 @@ function SupplementsTab() {
     onClick: function () {
       setReminder(!reminder);
     },
+    role: "switch",
+    "aria-checked": !!reminder,
+    "aria-label": "Supplement reminder",
     style: {
       width: 46,
       height: 26,
@@ -43098,7 +43248,7 @@ function CycleReminderCard() {
         padding: "8px 16px",
         borderRadius: 9,
         border: "none",
-        background: GR,
+        background: GR_D,
         color: "#fff",
         fontSize: "0.75rem",
         fontWeight: 700,
@@ -44565,6 +44715,7 @@ function CoachScreen(p) {
   var [savedMsg, setSavedMsg] = useState("");
   var scrollRef = useRef(null);
   var histRef = useRef(ld("coachLastHist", []));
+  var composerRef = useRef(null);
   useEffect(function () {
     if (msgs.length > 0) {
       sd("coachLastMsgs", msgs.slice(-40));
@@ -44579,6 +44730,22 @@ function CoachScreen(p) {
     sd("coachLastHist", []);
   }
   var [coachTab, setCoachTab] = useState("chat");
+  /* The chat composer is a fixed bar sitting above the nav. Publish its height
+     so the floating voice button parks clear of it — parked at its normal
+     spot it lands squarely on the send button, and the send button then never
+     receives the tap. */
+  useEffect(function () {
+    var h = 0;
+    if (coachTab === "chat" && composerRef.current) {
+      h = Math.round(composerRef.current.getBoundingClientRect().height);
+    }
+    window.__lkBottomBar = h;
+    window.dispatchEvent(new Event("lockedBottomBar"));
+    return function () {
+      window.__lkBottomBar = 0;
+      window.dispatchEvent(new Event("lockedBottomBar"));
+    };
+  }, [coachTab]);
   var [instructions, setInstructionsRaw] = useState(function () {
     return ld("coachInstructions", "");
   });
@@ -47033,6 +47200,7 @@ function CoachScreen(p) {
       }
     });
   }))), coachTab === "chat" && React.createElement("div", {
+    ref: composerRef,
     style: {
       position: "fixed",
       bottom: 80,
@@ -47083,6 +47251,7 @@ function CoachScreen(p) {
   }), React.createElement("button", {
     onClick: send,
     disabled: !input.trim() || loading,
+    "aria-label": "Send message to coach",
     style: {
       width: 46,
       height: 46,
@@ -48591,7 +48760,15 @@ var VoiceButton = React.memo(function VoiceButton() {
       return 0;
     }
   }();
-  var BOTTOM_GAP = 82 + SAFE_B;
+  /* 82px clears the nav. A screen with its own fixed bar above the nav — the
+     Coach composer is the one — publishes its height here so the button parks
+     above it; without this it lands exactly on the send button and the send
+     button cannot be tapped at all.
+
+     Read at call time, not captured: this component is memoised with no props,
+     so it does not re-render when the bar appears, and a value snapshotted at
+     first render would leave the button parked over the composer forever. */
+  var bottomGap = function () { return 82 + SAFE_B + (window.__lkBottomBar || 0); };
   var TOP_GAP = 56;
   var DECEL = 0.998;
   var cornerToXY = function (c) {
@@ -48599,7 +48776,7 @@ var VoiceButton = React.memo(function VoiceButton() {
       vh = window.innerHeight;
     var right = vw - SIZE - EDGE,
       left = EDGE,
-      bottom = vh - SIZE - BOTTOM_GAP,
+      bottom = vh - SIZE - bottomGap(),
       top = TOP_GAP;
     if (c === "tl") return {
       x: left,
@@ -48624,6 +48801,19 @@ var VoiceButton = React.memo(function VoiceButton() {
   var [pos, setPos] = useState(function () {
     return cornerToXY(ld("voiceBtnCorner", "br"));
   });
+  useEffect(function () {
+    function repark() {
+      var xy = cornerToXY(ld("voiceBtnCorner", "br"));
+      applyXY(xy.x, xy.y);
+      setPos(xy);
+    }
+    window.addEventListener("lockedBottomBar", repark);
+    window.addEventListener("resize", repark);
+    return function () {
+      window.removeEventListener("lockedBottomBar", repark);
+      window.removeEventListener("resize", repark);
+    };
+  }, []);
   var [dragging, setDragging] = useState(false);
   var dragRef = useRef({
     active: false,
