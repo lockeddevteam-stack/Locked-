@@ -1828,6 +1828,9 @@ var ORD2 = "var(--color-accent-deep)",
   ORTX = "var(--color-accent-text)",
   TX3 = "var(--color-text-tertiary)",
   GLASSBAR = "var(--glass-bar)";
+/* A neutral for the not-yet-earned badges. Hex for the same reason the badge
+   colours are: it gets an alpha suffix appended. */
+var LOCKED_BADGE = "#8E8E93";
 var WA_H = "#F59E0B",
   VI_H = "#8B5CF6",
   PRO_H = "#3B82F6",
@@ -27022,6 +27025,11 @@ function ProfileScreen(p) {
     return a + (parseInt((w.vol || "0").replace(/[^0-9]/g, "")) || 0);
   }, 0);
   var prCount = Object.keys(prs).length;
+  /* Badge colours are hex, not the CSS variables. Each one is concatenated
+     with an alpha suffix (col + "12" for the tint, col + "30" for the
+     border), and "var(--color-info)12" is not a colour — the browser throws
+     the whole declaration away, which left some badges with no background
+     and no border sitting beside ones that had both. */
   var badges = [];
   if (history.length >= 1) badges.push({
     icon: "1",
@@ -27033,19 +27041,19 @@ function ProfileScreen(p) {
     icon: "5",
     label: "5 Workouts",
     desc: "Consistency is building",
-    col: BLU
+    col: BLU_H
   });
   if (history.length >= 10) badges.push({
     icon: "10",
     label: "10 Workouts",
     desc: "The habit is forming",
-    col: OR
+    col: OR_H
   });
   if (history.length >= 25) badges.push({
     icon: "25",
     label: "25 Workouts",
     desc: "Committed athlete",
-    col: WA
+    col: WA_H
   });
   if (prCount >= 1) badges.push({
     icon: "PR",
@@ -27057,7 +27065,7 @@ function ProfileScreen(p) {
     icon: "P5",
     label: "5 PRs",
     desc: "You are getting stronger",
-    col: OR
+    col: OR_H
   });
   if (totalSets >= 100) badges.push({
     icon: "S",
@@ -27323,11 +27331,16 @@ function ProfileScreen(p) {
   }), locked.map(function (b, i) {
     return React.createElement("div", {
       key: "l" + i,
+      /* Neutral grey rather than the card token: a global rule rewrites
+         anything with `background: var(--color-card)` to a 16px radius with a
+         drop shadow, which made the locked badges a different shape from the
+         earned ones sitting next to them in the same grid. Same tint pattern
+         as the earned badges, just colourless. */
       style: {
-        background: CARD,
+        background: LOCKED_BADGE + "10",
         borderRadius: 13,
         padding: "12px",
-        border: "1px solid " + BORD,
+        border: "1px solid " + LOCKED_BADGE + "28",
         display: "flex",
         gap: 12,
         alignItems: "center",
@@ -27338,7 +27351,7 @@ function ProfileScreen(p) {
         width: 38,
         height: 38,
         borderRadius: 10,
-        background: SU,
+        background: LOCKED_BADGE + "22",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
