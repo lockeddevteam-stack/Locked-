@@ -132,7 +132,7 @@
   var SYNC_KEYS = [
     /* training */
     "lk_history", "lk_workoutHistory", "lk_splits", "lk_prs",
-    "lk_cardioFavorites", "lk_cardioPrefs", "lk_cardioMigrated",
+    "lk_cardioFavorites", "lk_cardioPrefs", "lk_checkinPerDay", "lk_cardioMigrated",
     "lk_customEx", "lk_featuredLifts", "lk_perfTracking", "lk_exNotes",
     /* profile & body */
     "lk_profile", "lk_weightLog", "lk_bfLog", "lk_progressPhotos",
@@ -1144,6 +1144,14 @@
        above, where it is safe. */
     .lk-shell{min-height:100vh;}
     @supports (min-height:100dvh){.lk-shell{min-height:100dvh;}}
+    /* An app screen, not a web page: the column is exactly the viewport
+       minus the bottom nav, the header and tab bar are pinned children, and
+       only the pane in the middle scrolls. No overflow on the column itself
+       — its children are sized so nothing can escape, which keeps iOS's
+       fixed-position handling out of the picture entirely. */
+    .lk-appcol{height:calc(100vh - 80px - env(safe-area-inset-bottom, 0px));display:flex;flex-direction:column;}
+    @supports (height:100dvh){.lk-appcol{height:calc(100dvh - 80px - env(safe-area-inset-bottom, 0px));}}
+    .lk-appcol-scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}
     *{-webkit-tap-highlight-color:transparent;}
   </style>
 </head>
@@ -3952,13 +3960,26 @@ function unitConvOn() {
     return true;
   }
 }
+/* Display rounding, app-wide policy: weights and macro grams snap to the
+   nearest quarter and never show a decimal they don't need — 84.1 reads as
+   84, 84.5 stays 84.5, 84.25 stays 84.25. Calories are always whole
+   numbers. Storage keeps full precision; only what the eye sees is snapped. */
+function fmtQ(v) {
+  var n = parseFloat(v);
+  if (isNaN(n)) return "";
+  var r = Math.round(n * 4) / 4;
+  return String(r);
+}
+function fmtCal(v) {
+  var n = parseFloat(v);
+  return isNaN(n) ? "" : String(Math.round(n));
+}
 function kgToDisp(kgV, useKg) {
   if (kgV === "" || kgV === null || kgV === undefined) return "";
   var n = parseFloat(kgV);
   if (isNaN(n)) return "";
   var v = useKg || !unitConvOn() ? n : n * 2.20462;
-  var r = Math.round(v * 10) / 10;
-  return String(r % 1 === 0 ? Math.round(r) : r);
+  return fmtQ(v);
 }
 function dispToKg(v, useKg) {
   if (v === "" || v === null || v === undefined) return "";
@@ -19410,7 +19431,7 @@ function RecipeBuilder(p) {
       color: MU,
       fontWeight: 600
     }
-  }, "\xB7 P ", per.pro, "g \xB7 C ", per.carb, "g \xB7 F ", per.fat, "g")), per.nut && React.createElement("p", {
+  }, "\xB7 P ", fmtQ(per.pro), "g \xB7 C ", fmtQ(per.carb), "g \xB7 F ", fmtQ(per.fat), "g")), per.nut && React.createElement("p", {
     style: {
       fontSize: "0.6875rem",
       color: MU,
@@ -25570,7 +25591,7 @@ function GoalsTab(p) {
   var todayISO = isoDay();
   function toDisp(kgV) {
     if (!kgV && kgV !== 0) return 0;
-    return useKg ? Math.round(kgV * 10) / 10 : Math.round(kgV * 2.20462 * 10) / 10;
+    return fmtQ(useKg ? kgV : kgV * 2.20462);
   }
   function toKg(v) {
     return convToKg(v, useKg);
@@ -26888,7 +26909,7 @@ function ProgressPage(p) {
   }
   function toDisp(kgV) {
     if (!kgV && kgV !== 0) return 0;
-    return useKg ? Math.round(kgV * 10) / 10 : Math.round(kgV * 2.20462 * 10) / 10;
+    return fmtQ(useKg ? kgV : kgV * 2.20462);
   }
   var calMonth = new Date().getMonth();
   var calYear = new Date().getFullYear();
@@ -27441,6 +27462,7 @@ function ProgressPage(p) {
       marginBottom: 16
     }
   }, React.createElement("button", {
+    "aria-label": "Previous month",
     onClick: function () {
       if (calM === 0) {
         setCalM(11);
@@ -27465,6 +27487,7 @@ function ProgressPage(p) {
       color: TX
     }
   }, mnths[calM], " ", calY), React.createElement("button", {
+    "aria-label": "Next month",
     onClick: function () {
       if (calM === 11) {
         setCalM(0);
@@ -27657,7 +27680,7 @@ function PRHub(p) {
   var unit = useKg ? "kg" : "lb";
   function toDisp(kgV) {
     if (!kgV && kgV !== 0) return kgV;
-    return useKg ? Math.round(kgV * 10) / 10 : Math.round(kgV * 2.20462 * 10) / 10;
+    return fmtQ(useKg ? kgV : kgV * 2.20462);
   }
   function toKg(v) {
     return convToKg(v, useKg);
@@ -27845,7 +27868,7 @@ function PRHub(p) {
       fontWeight: 800,
       color: OR
     }
-  }, Math.round(toKg(parseFloat(logW)) * (1 + parseInt(logReps) / 30) * 10) / 10, " kg")), React.createElement("div", {
+  }, fmtQ(toKg(parseFloat(logW)) * (1 + parseInt(logReps) / 30)), " kg")), React.createElement("div", {
     style: {
       textAlign: "right"
     }
@@ -28310,7 +28333,7 @@ function PRHub(p) {
       return !b || x.w > b.w ? x : b;
     }, null);
     if (!best) return null;
-    var dw = useKg ? Math.round(best.w * 10) / 10 : Math.round(best.w * 2.20462 * 10) / 10;
+    var dw = fmtQ(useKg ? best.w : best.w * 2.20462);
     return React.createElement("div", {
       key: eid,
       style: {
@@ -28916,7 +28939,7 @@ function ProfileScreen(p) {
       color: TX
     }
   }, "Personal Records"), bestPRs.map(function (pr, i) {
-    var dw = useKg ? Math.round(pr.w * 10) / 10 : Math.round(pr.w * 2.20462 * 10) / 10;
+    var dw = fmtQ(useKg ? pr.w : pr.w * 2.20462);
     return React.createElement("div", {
       key: i,
       style: {
@@ -30237,6 +30260,7 @@ function NotificationsCard() {
 }
 
 function SettingsScreen(p) {
+  var [checkinFreq, setCheckinFreq] = useState(function () { return checkinPerDay(); });
   var [settingsView, setSettingsView] = useState("main");
   var useKg = p.useKg !== false;
   var unit = useKg ? "KG" : "LBS";
@@ -30295,7 +30319,7 @@ function SettingsScreen(p) {
   var [deleteLoading, setDeleteLoading] = useState(false);
   var [bodyWeight, setBodyWeight] = useState(function () {
     if (!p.profile.weightKg) return "";
-    return String(p.useKg ? Math.round(p.profile.weightKg * 10) / 10 : Math.round(p.profile.weightKg * 2.20462 * 10) / 10);
+    return fmtQ(p.useKg ? p.profile.weightKg : p.profile.weightKg * 2.20462);
   });
   useEffect(function () {
     function sync() {
@@ -31028,6 +31052,48 @@ function SettingsScreen(p) {
       cursor: "pointer"
     }
   }, useKg ? "KG - Switch to LBS" : "LBS - Switch to KG")), React.createElement("div", {
+    style: {
+      background: CARD,
+      borderRadius: 12,
+      padding: "12px 16px",
+      border: "1px solid " + BORD,
+      marginBottom: 12
+    }
+  }, React.createElement("p", {
+    style: {
+      fontSize: "0.8125rem",
+      fontWeight: 600,
+      color: TX,
+      marginBottom: 4
+    }
+  }, "Daily check-ins"), React.createElement("p", {
+    style: {
+      fontSize: "0.6875rem",
+      color: MU,
+      marginBottom: 10,
+      lineHeight: 1.45
+    }
+  }, "How many times a day the coach asks. Once you've hit it, the check-in is done for the day."),
+  React.createElement("div", {
+    style: { display: "flex", gap: 6 }
+  }, [[1, "Once a day"], [2, "Twice"], [4, "4 times"]].map(function (opt) {
+    var on = checkinFreq === opt[0];
+    return React.createElement("button", {
+      key: opt[0],
+      onClick: function () {
+        sd("checkinPerDay", opt[0]);
+        setCheckinFreq(opt[0]);
+      },
+      "aria-pressed": on,
+      style: {
+        flex: 1, padding: "11px 4px", minHeight: 44, borderRadius: 10,
+        cursor: "pointer",
+        border: "1.5px solid " + (on ? OR_H : BORD),
+        background: on ? OR_H + "1C" : SU,
+        color: on ? OR : MU, fontSize: "0.75rem", fontWeight: 700
+      }
+    }, opt[1]);
+  }))), React.createElement("div", {
     style: {
       background: CARD,
       borderRadius: 12,
@@ -35234,7 +35300,7 @@ function FuelTab(p) {
       color: TX,
       lineHeight: 1
     }
-  }, totalCal, React.createElement("span", {
+  }, fmtCal(totalCal), React.createElement("span", {
     style: {
       fontSize: "0.75rem",
       fontWeight: 400,
@@ -35254,17 +35320,17 @@ function FuelTab(p) {
     }
   }, [{
     label: "Protein",
-    val: totalPro,
+    val: fmtQ(totalPro),
     target: targets.pro,
     col: BLU
   }, {
     label: "Carbs",
-    val: totalCarb,
+    val: fmtQ(totalCarb),
     target: targets.carb,
     col: WA
   }, {
     label: "Fat",
-    val: totalFat,
+    val: fmtQ(totalFat),
     target: targets.fat,
     col: FAT
   }].map(function (m) {
@@ -37667,7 +37733,7 @@ function SearchTab(p) {
         color: MU,
         marginTop: 1
       }
-    }, f.cal, " kcal \xB7 ", f.pro, "g pro")), React.createElement("div", {
+    }, fmtCal(f.cal), " kcal \xB7 ", fmtQ(f.pro), "g pro")), React.createElement("div", {
       style: {
         display: "flex",
         gap: 8
@@ -46747,7 +46813,7 @@ function coachBuildContext(o) {
         parts.push(it.key + " " + v + (fl ? " (" + fl + ")" : ""));
         if (fl) flagged.push(it.key + " is " + (fl === "red" ? "well below" : "below") + " this user's own 30-day usual");
       });
-      L.push("CHECKIN TODAY (1-5, 3 = usual for them): " + parts.join(", "));
+      L.push("CHECKIN TODAY (1-5, 5 best; stress inverted, 5 = maxed): " + parts.join(", "));
       flagged.forEach(function (f) { L.push("CHECKIN FLAG: " + f); });
       if (todayFb.hoursSlept) L.push("SLEPT: " + todayFb.hoursSlept + "h");
       if (todayFb.tags && todayFb.tags.length) L.push("CHECKIN TAGS: " + todayFb.tags.join(", "));
@@ -48360,6 +48426,7 @@ function CoachScreen(p) {
   var swipeRef = useRef(null);
   var PANE_ORDER = ["chat", "plan", "check-in", "instructions"];
   return React.createElement("div", {
+    className: "lk-appcol",
     onTouchStart: function (e) {
       var t = e.touches && e.touches[0];
       swipeRef.current = t ? { x: t.clientX, y: t.clientY } : null;
@@ -48374,9 +48441,6 @@ function CoachScreen(p) {
       var idx = PANE_ORDER.indexOf(coachTab);
       var next = dx < 0 ? idx + 1 : idx - 1;
       if (next >= 0 && next < PANE_ORDER.length) setCoachTab(PANE_ORDER[next]);
-    },
-    style: {
-      paddingBottom: 160
     }
   }, savedMsg && React.createElement("div", {
     style: {
@@ -48407,7 +48471,8 @@ function CoachScreen(p) {
     style: {
       padding: "52px 20px 16px",
       background: SURF,
-      borderBottom: "1px solid " + BORD
+      borderBottom: "1px solid " + BORD,
+      flexShrink: 0
     }
   }, React.createElement("div", {
     style: {
@@ -48470,7 +48535,7 @@ function CoachScreen(p) {
     var act = coachTab === t[0];
     /* the accent dot is the check-in's entry point: visible without opening
        the pane, gone the moment today's is done */
-    var dot = t[0] === "check-in" && !checkinDoneToday(ld("feedback", []));
+    var dot = t[0] === "check-in" && !checkinDoneForDay(ld("feedback", []));
     return React.createElement("button", {
       key: t[0],
       onClick: function () {
@@ -48498,7 +48563,9 @@ function CoachScreen(p) {
         width: 7, height: 7, borderRadius: 4, background: OR
       }
     }));
-  }))), coachTab === "instructions" && React.createElement(CoachSetupPane, {
+  }))), coachTab === "instructions" && React.createElement("div", {
+    className: "lk-appcol-scroll"
+  }, React.createElement(CoachSetupPane, {
     instructions: instructions,
     instrDraft: instrDraft,
     setInstrDraft: setInstrDraft,
@@ -48507,7 +48574,8 @@ function CoachScreen(p) {
     coachMemory: coachMemory,
     setCoachMemory: setCoachMemory,
     onInterview: function () { setInterviewOpen(true); }
-  }), coachTab === "plan" && React.createElement("div", {
+  })), coachTab === "plan" && React.createElement("div", {
+    className: "lk-appcol-scroll",
     style: {
       padding: "16px 20px",
       paddingBottom: 150
@@ -48788,6 +48856,7 @@ function CoachScreen(p) {
       }, React.createElement(Ic, { d: D.trash, z: 13, c: RE }))));
   })()), coachTab === "chat" && React.createElement("div", {
     ref: scrollRef,
+    className: "lk-appcol-scroll",
     /* polite, never assertive: an interrupting announcement mid-thought is
        worse than a short wait */
     "aria-live": "polite",
@@ -48798,12 +48867,10 @@ function CoachScreen(p) {
       if (nb !== nearBottom) setNearBottom(nb);
     },
     style: {
-      padding: "16px 16px 160px",
+      padding: "16px 16px 20px",
       display: "flex",
       flexDirection: "column",
-      gap: 8,
-      overflowY: "auto",
-      height: "calc(100vh - 220px)"
+      gap: 8
     }
   }, msgs.length === 0 && (function () {
     /* Generated from actual data, never "How can I help?" — see coachOpener.
@@ -49290,7 +49357,7 @@ function CoachScreen(p) {
           fontSize: "0.6875rem",
           color: MU
         }
-      }, item.cal, "cal \xB7 ", item.pro, "p \xB7 ", item.carb, "c \xB7 ", item.fat, "f"));
+      }, fmtCal(item.cal), "cal \xB7 ", fmtQ(item.pro), "p \xB7 ", fmtQ(item.carb), "c \xB7 ", fmtQ(item.fat), "f"));
     }), React.createElement("div", {
       style: {
         display: "flex",
@@ -49571,17 +49638,15 @@ function CoachScreen(p) {
     }
   }, "Jump to latest \u2193"), coachTab === "chat" && React.createElement("div", {
     ref: composerRef,
+    /* A flex child, not position:fixed: the column already ends at the nav,
+       so the composer docks by layout and can never drift, cover the last
+       message, or jump when the keyboard opens. */
     style: {
-      position: "fixed",
-      bottom: 80,
-      left: "50%",
-      transform: "translateX(-50%)",
+      flexShrink: 0,
       width: "100%",
-      maxWidth: 420,
       padding: "8px 16px 12px",
       borderTop: "1px solid " + BORD,
       background: GLASSBAR,
-      zIndex: 90,
       WebkitAppearance: "none",
       WebkitBorderRadius: 0
     }
@@ -49674,7 +49739,9 @@ function CoachScreen(p) {
     d: D.send,
     z: 18,
     c: "#fff"
-  })))), coachTab === "check-in" && React.createElement(FeedbackScreen, {
+  })))), coachTab === "check-in" && React.createElement("div", {
+    className: "lk-appcol-scroll"
+  }, React.createElement(FeedbackScreen, {
     useKg: p.useKg,
     profile: p.profile,
     splits: p.splits,
@@ -49683,7 +49750,7 @@ function CoachScreen(p) {
       setCoachTab("chat");
       setInput(prompt);
     }
-  }), interviewOpen && React.createElement(CoachInterview, {
+  })), interviewOpen && React.createElement(CoachInterview, {
     onClose: function () { setInterviewOpen(false); },
     onSave: function (text) {
       applyCoachInstructions(text);
@@ -49859,12 +49926,33 @@ function CoachScreen(p) {
    Scale convention everywhere: 1..5 anchored on "usual for me" at 3. Stress
    is inverted for flagging (high stress is the bad direction). */
 var CHECKIN_ITEMS = [
-  { key: "sleep", label: "Sleep", q: "How well did you sleep?" },
-  { key: "energy", label: "Energy", q: "How much have you got in the tank?" },
-  { key: "soreness", label: "Soreness", q: "How do your muscles feel?" },
-  { key: "mood", label: "Mood", q: "How are you in yourself?" },
-  { key: "stress", label: "Stress", q: "How much is life pressing on you?" }
+  /* Absolute, rankable anchors rather than better/worse-than-usual: a
+     relative scale cannot record a run of genuinely good days — someone
+     consistently at their best would log "usual" forever. The baseline maths
+     still compares each answer to the person's own 30-day mean, so "below
+     your usual" stays personal; only the words on the buttons are absolute.
+     Energy is literal percentages, which was the ask. */
+  { key: "sleep", label: "Sleep", q: "How well did you sleep?",
+    scale: ["Awful", "Poor", "OK", "Good", "Great"] },
+  { key: "energy", label: "Energy", q: "How much is in the tank?",
+    scale: ["Empty", "25%", "50%", "75%", "100%"] },
+  { key: "soreness", label: "Soreness", q: "How do your muscles feel?",
+    scale: ["Wrecked", "Sore", "Mild", "Fresh", "100%"] },
+  { key: "mood", label: "Mood", q: "How are you in yourself?",
+    scale: ["Low", "Meh", "OK", "Good", "Great"] },
+  /* stress: 5 means maxed — the bad direction — and checkinFlag already
+     inverts it, so the stored numbers keep meaning what they always did */
+  { key: "stress", label: "Stress", q: "How much is life pressing on you?",
+    scale: ["Calm", "Low", "Medium", "High", "Maxed"] }
 ];
+function checkinScaleLabel(key, v) {
+  for (var i = 0; i < CHECKIN_ITEMS.length; i++) {
+    if (CHECKIN_ITEMS[i].key === key) {
+      return v >= 1 && v <= 5 ? CHECKIN_ITEMS[i].scale[v - 1] : "\u2013";
+    }
+  }
+  return String(v);
+}
 var CHECKIN_MIN_BASELINE = 14;
 function checkinStats(entries) {
   var cutoff = new Date();
@@ -49919,6 +50007,22 @@ function checkinLowRun(entries, key, ceil) {
     else break;
   }
   return run;
+}
+/* How many check-ins a day the user asked for: once, twice, or four times.
+   Once is the default. "Done for the day" always means "hit that number". */
+function checkinPerDay() {
+  var v = parseInt(ld("checkinPerDay", 1), 10);
+  return v === 2 || v === 4 ? v : 1;
+}
+function checkinCountToday(entries) {
+  var today = isoDay(), n = 0;
+  for (var i = 0; i < (entries || []).length; i++) {
+    if (entries[i] && entries[i].date && dayOf(entries[i].date) === today) n++;
+  }
+  return n;
+}
+function checkinDoneForDay(entries) {
+  return checkinCountToday(entries) >= checkinPerDay();
 }
 function checkinDoneToday(entries) {
   var today = isoDay();
@@ -50006,7 +50110,7 @@ function coachCheckinResponse(entry, entries, o) {
 }
 
 var CHECKIN_TAGS = ["Travel", "Illness", "Poor food", "Big day at work", "Period"];
-var CHECKIN_SCALE = ["Much worse", "Worse", "Usual", "Better", "Much better"];
+
 
 function FeedbackScreen(p) {
   var [entries, setEntriesRaw] = useState(function () {
@@ -50056,7 +50160,9 @@ function FeedbackScreen(p) {
     setTags([]);
   }
 
-  var doneToday = checkinDoneToday(entries);
+  var perDay = checkinPerDay();
+  var countToday = checkinCountToday(entries);
+  var doneToday = countToday >= perDay;
   var stats = checkinStats(entries);
 
   /* fourteen dots, one per day, newest last; filled = checked in.
@@ -50135,7 +50241,8 @@ function FeedbackScreen(p) {
         }
       }, React.createElement("p", {
         style: { fontSize: "0.9375rem", fontWeight: 700, color: TX, marginBottom: 4 }
-      }, "Today's check-in is done"),
+      }, perDay === 1 ? "Today's check-in is done"
+       : "Today's check-ins are done (" + countToday + " of " + perDay + ")"),
       React.createElement("p", {
         style: { fontSize: "0.8125rem", color: MU }
       }, "Come back tomorrow. Tap a dot to look at any day.")),
@@ -50154,13 +50261,17 @@ function FeedbackScreen(p) {
           key: it.key, style: { display: "flex", padding: "5px 0" }
         }, React.createElement("p", { style: { flex: 1, fontSize: "0.8125rem", color: MU } }, it.label),
            React.createElement("p", { style: { fontSize: "0.8125rem", fontWeight: 700, color: TX } },
-             v >= 1 && v <= 5 ? CHECKIN_SCALE[v - 1] : "\u2013"));
+             checkinScaleLabel(it.key, v)));
       }),
       viewEntry.entry.note && React.createElement("p", {
         style: { fontSize: "0.8125rem", color: TX, marginTop: 8, fontStyle: "italic" }
       }, "\u201c" + viewEntry.entry.note + "\u201d")))
 
     : React.createElement("div", null,
+      perDay > 1 && React.createElement("p", {
+        className: "ds-num",
+        style: { fontSize: "0.75rem", fontWeight: 700, color: MU, marginBottom: 12 }
+      }, "Check-in " + (countToday + 1) + " of " + perDay + " today"),
       CHECKIN_ITEMS.map(function (it) {
         return React.createElement("div", { key: it.key, style: { marginBottom: 16 } },
           React.createElement("p", {
@@ -50177,7 +50288,7 @@ function FeedbackScreen(p) {
               onClick: function () { setVal(it.key, n); },
               role: "radio",
               "aria-checked": on,
-              "aria-label": CHECKIN_SCALE[n - 1],
+              "aria-label": it.scale[n - 1],
               style: {
                 flex: 1, height: 56, minHeight: 56, minWidth: 0, padding: 0,
                 borderRadius: 12, cursor: "pointer",
@@ -50186,8 +50297,7 @@ function FeedbackScreen(p) {
                 color: on ? OR : MU,
                 fontSize: "0.5625rem", fontWeight: 700, lineHeight: 1.2
               }
-            }, n === 1 ? "Much\u00a0worse" : n === 2 ? "Worse"
-             : n === 3 ? "Usual" : n === 4 ? "Better" : "Much\u00a0better");
+            }, it.scale[n - 1]);
           })));
       }),
       /* the optional extras live below the questions and never block */
@@ -50824,7 +50934,7 @@ function WeightLogCard(p) {
       fontSize: "0.75rem",
       color: GR
     }
-  }, "Logged today: ", useKg ? Math.round(weightLog[weightLog.length - 1].kg * 10) / 10 : Math.round(weightLog[weightLog.length - 1].kg * 2.20462 * 10) / 10, " ", useKg ? "kg" : "lbs") : React.createElement("div", {
+  }, "Logged today: ", fmtQ(useKg ? weightLog[weightLog.length - 1].kg : weightLog[weightLog.length - 1].kg * 2.20462), " ", useKg ? "kg" : "lbs") : React.createElement("div", {
     style: {
       display: "flex",
       gap: 8
@@ -50866,7 +50976,7 @@ function WeightLogCard(p) {
       overflowY: "auto"
     }
   }, weightLog.slice().reverse().slice(0, 14).map(function (e, i) {
-    var display = useKg ? Math.round(e.kg * 10) / 10 : Math.round(e.kg * 2.20462 * 10) / 10;
+    var display = fmtQ(useKg ? e.kg : e.kg * 2.20462);
     return React.createElement("div", {
       key: i,
       style: {
