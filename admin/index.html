@@ -3,11 +3,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <title>LOCKED — Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
       --bg:      #080809;
@@ -66,13 +67,13 @@
       width: 100%;
       background: var(--subtle); border: 1px solid var(--bord);
       border-radius: 10px; padding: 11px 14px;
-      color: var(--text); font-size: 13px;
+      color: var(--text); font-size: 16px;
       font-family: 'DM Sans', sans-serif;
       outline: none; margin-bottom: 14px;
       transition: border-color 0.2s;
     }
     .field-input:focus { border-color: rgba(249,115,22,0.5); }
-    .field-input::placeholder { color: rgba(148,163,184,0.4); }
+    .field-input::placeholder { color: #9CA3AF; }
     .btn-primary {
       width: 100%; padding: 13px; border: none; border-radius: 10px;
       background: var(--orange); color: #fff;
@@ -80,7 +81,7 @@
       font-size: 17px; font-weight: 800; letter-spacing: 0.07em;
       cursor: pointer; transition: opacity 0.2s;
     }
-    .btn-primary:hover { opacity: 0.88; }
+    @media (hover:hover) and (pointer:fine) { .btn-primary:hover { opacity: 0.88; } }
     .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
     #setup-error { color: var(--red); font-size: 12px; margin-top: 10px; }
 
@@ -122,14 +123,14 @@
       background: transparent; color: var(--muted); font-size: 12px;
       font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all 0.18s;
     }
-    .btn-sm:hover { border-color: var(--orange); color: var(--orange); }
+    @media (hover:hover) and (pointer:fine) { .btn-sm:hover { border-color: var(--orange); color: var(--orange); } }
     .btn-icon {
       width: 32px; height: 32px; border-radius: 8px;
       border: 1px solid var(--bord); background: transparent;
       color: var(--muted); cursor: pointer; display: flex;
       align-items: center; justify-content: center; transition: all 0.18s;
     }
-    .btn-icon:hover { border-color: var(--orange); color: var(--orange); }
+    @media (hover:hover) and (pointer:fine) { .btn-icon:hover { border-color: var(--orange); color: var(--orange); } }
     .spin { animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -147,7 +148,7 @@
       margin-bottom: -1px; transition: all 0.18s;
       font-family: 'DM Sans', sans-serif;
     }
-    .tab:hover { color: var(--text); }
+    @media (hover:hover) and (pointer:fine) { .tab:hover { color: var(--text); } }
     .tab.active { color: var(--orange); border-bottom-color: var(--orange); }
 
     /* ── CONTENT ─────────────────────────────────────────────── */
@@ -188,7 +189,10 @@
     .table-wrap {
       background: var(--surf); border: 1px solid var(--bord);
       border-radius: 14px; overflow: hidden;
+      /* the table itself scrolls sideways rather than crushing its columns */
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
     }
+    .table-wrap table { min-width: 640px; }
     .search-bar {
       padding: 14px 16px; border-bottom: 1px solid var(--bord);
       display: flex; align-items: center; gap: 10px;
@@ -208,7 +212,7 @@
     }
     tbody tr { border-bottom: 1px solid rgba(36,36,40,0.6); transition: background 0.15s; }
     tbody tr:last-child { border-bottom: none; }
-    tbody tr:hover { background: rgba(255,255,255,0.025); }
+    @media (hover:hover) and (pointer:fine) { tbody tr:hover { background: rgba(255,255,255,0.025); } }
     tbody td { padding: 12px 16px; font-size: 13px; vertical-align: middle; }
 
     /* ── BADGES ──────────────────────────────────────────────── */
@@ -225,12 +229,15 @@
     /* ── USER DETAIL PANEL ───────────────────────────────────── */
     .panel-overlay {
       position: fixed; inset: 0; z-index: 200;
-      background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+      background: rgba(0,0,0,0.7);
+      -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
       display: none; align-items: center; justify-content: flex-end;
     }
     .panel-overlay.open { display: flex; }
     .side-panel {
-      width: 380px; height: 100vh; overflow-y: auto;
+      width: min(380px, 100vw); height: 100vh; height: 100dvh; overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
       background: var(--surf); border-left: 1px solid var(--bord);
       padding: 24px; animation: slideRight 0.25s cubic-bezier(0.16,1,0.3,1);
     }
@@ -302,7 +309,7 @@
       font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.18s;
       font-family: 'DM Sans', sans-serif;
     }
-    .btn-danger:hover { background: rgba(239,68,68,0.22); }
+    @media (hover:hover) and (pointer:fine) { .btn-danger:hover { background: rgba(239,68,68,0.22); } }
 
     /* ── SUB EDITOR BUTTONS ─────────────────────────────────── */
     .sub-btn, .plan-btn {
@@ -312,7 +319,7 @@
       cursor: pointer; transition: all 0.18s;
       font-family: 'DM Sans', sans-serif;
     }
-    .sub-btn:hover, .plan-btn:hover { border-color: var(--orange); color: var(--text); }
+    @media (hover:hover) and (pointer:fine) { .sub-btn:hover, .plan-btn:hover { border-color: var(--orange); color: var(--text); } }
     .sub-btn.selected-active  { border-color: var(--green);  background: rgba(34,197,94,0.1);  color: var(--green);  }
     .sub-btn.selected-trial   { border-color: var(--yellow); background: rgba(245,158,11,0.1); color: var(--yellow); }
     .sub-btn.selected-expired { border-color: var(--red);    background: rgba(239,68,68,0.1);  color: var(--red);    }

@@ -6,18 +6,45 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="LOCKED"/>
-  <meta name="theme-color" content="#080809"/>
+  <meta name="theme-color" content="var(--color-shell-bg)"/>
   <link rel="manifest" href="/manifest.json"/>
   <title>LOCKED</title>
   <script>
-    /* Style profile: apply persisted theme before first paint (no flash) */
+    /* Style profile: apply persisted theme before first paint (no flash).
+       With nothing stored, follow the system rather than forcing dark on a
+       user who has told the OS they want light. */
     try{
-      var _sp=JSON.parse(localStorage.getItem("lk_theme")||'"dark"');
+      var _stored=localStorage.getItem("lk_theme");
+      var _sp=_stored?JSON.parse(_stored):(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");
       var _h=document.documentElement;
       _h.setAttribute("data-style-profile",_sp);
       if(_sp==="light")_h.classList.add("light-mode");
       else if(_sp!=="dark")_h.classList.add("theme-"+_sp);
     }catch(e){}
+    /* Text size. Every font in the app is rem, but nothing ever changed the
+       root, so an installed PWA gave Dynamic Type users no enlargement at all
+       and pinch-zoom was the only recourse. Applied before paint so the page
+       never renders at the wrong size first. */
+    try{
+      var _ts=parseInt(localStorage.getItem("lk_textScale")||"100",10);
+      if(_ts&&_ts!==100)document.documentElement.style.fontSize=_ts+"%";
+    }catch(e){}
+    /* iOS moves the visual viewport rather than resizing the layout viewport,
+       so position:fixed chrome floats over the keyboard. Hide it while the
+       keyboard is up and re-assert on focusout, which also clears the iOS 26
+       bug where offsetTop does not return to 0 until the next scroll. */
+    (function keyboardChrome(){
+      var vv = window.visualViewport;
+      if(!vv) return;
+      var root = document.documentElement;
+      function sync(){
+        root.classList.toggle("lk-kb-open", vv.height < window.innerHeight * 0.8);
+      }
+      vv.addEventListener("resize", sync);
+      vv.addEventListener("scroll", sync);
+      window.addEventListener("focusout", function(){ setTimeout(sync, 60); });
+    })();
+
     if("serviceWorker" in navigator){
       window.addEventListener("load", function(){
         navigator.serviceWorker.register("/sw.js").catch(function(){});
@@ -45,11 +72,19 @@
                worker is network-first and calls skipWaiting(), so clearing
                caches is all that was ever needed to pick up a new build. */
             localStorage.setItem("lk_deployVersion", latest);
+            /* Reload first, clear afterwards. Deleting every cache and *then*
+               reloading leaves a window where the offline shell is empty: if
+               the network drops in it, the service worker has nothing to fall
+               back on and the user gets an error page instead of the app. The
+               worker is network-first and calls skipWaiting(), so a reload
+               already picks up the new build; the sweep is housekeeping. */
             if("caches" in window){
               caches.keys().then(function(keys){
-                return Promise.all(keys.map(function(k){ return caches.delete(k); }));
-              }).then(function(){ window.location.reload(true); })
-                .catch(function(){ window.location.reload(true); });
+                /* keep the app shell until the fresh one is in place */
+                return Promise.all(keys.map(function(k){
+                  return k === "locked-v1" ? null : caches.delete(k);
+                }));
+              }).catch(function(){}).then(function(){ window.location.reload(true); });
             } else {
               window.location.reload(true);
             }
@@ -86,7 +121,7 @@
     border:  "#2C2C2E",
     text:    "#F5F5F7",
     muted:   "#A1A1AA",
-    orange:  "#F97316",
+    orange:  "var(--color-accent)",
     red:     "#EF4444",
     green:   "#10B981",
     font:    "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif",
@@ -558,7 +593,8 @@
     banner.id = "locked-trial-banner";
     banner.style.cssText = [
       "position:fixed","top:0","left:0","right:0","z-index:9999",
-      "background:" + T.orange,"color:#fff","font-family:" + T.font,
+      "padding-top:calc(env(safe-area-inset-top,0px) + 10px)",
+      "background:var(--color-accent-deep)","color:#fff","font-family:" + T.font,
       "font-size:14px","font-weight:600","text-align:center",
       "padding:10px 16px","display:flex","align-items:center",
       "justify-content:center","gap:16px"
@@ -568,10 +604,10 @@
       : "Trial ends in " + _subscription.daysLeft + " day" + (_subscription.daysLeft === 1 ? "" : "s");
     banner.innerHTML =
       '<span>' + msg + '</span>' +
-      '<button onclick="window.LOCKED.paywall()" style="background:#fff;color:' + T.orange +
+      '<button onclick="window.LOCKED.paywall()" style="background:#fff;color:var(--color-accent-deep)' +
       ';border:none;border-radius:6px;padding:4px 12px;font-weight:700;cursor:pointer;font-size:13px">UPGRADE TO PRO</button>' +
       '<button onclick="document.getElementById(\'locked-trial-banner\').remove()" ' +
-      'style="background:transparent;border:none;color:#fff;cursor:pointer;font-size:18px;line-height:1">×</button>';
+      'style="background:transparent;border:none;color:#fff;cursor:pointer;min-width:44px;min-height:44px;font-size:18px;line-height:1">×</button>';
     document.body.prepend(banner);
   }
 
@@ -592,7 +628,7 @@
     ].join(";");
 
     overlay.innerHTML = [
-      '<div id="lk-pw-sheet" style="width:100%;max-width:500px;background:#111113;border-radius:24px 24px 0 0;',
+      '<div id="lk-pw-sheet" style="width:100%;max-width:500px;background:var(--color-shell-card);border-radius:24px 24px 0 0;',
         'padding:0 0 env(safe-area-inset-bottom,24px);border:1px solid rgba(255,255,255,0.07);',
         'border-bottom:none;transform:translateY(100%);transition:transform 0.38s cubic-bezier(0.16,1,0.3,1);',
         'overflow-y:auto;max-height:92vh">',
@@ -606,12 +642,12 @@
         '<div style="padding:6px 22px 0;text-align:center">',
           '<div style="display:inline-flex;align-items:center;gap:7px;background:rgba(249,115,22,0.1);',
               'border:1px solid rgba(249,115,22,0.22);border-radius:100px;padding:5px 14px;margin-bottom:14px">',
-            '<div style="width:6px;height:6px;border-radius:50%;background:#F97316;box-shadow:0 0 8px rgba(249,115,22,0.8)"></div>',
-            '<span style="' + F + 'font-size:11px;font-weight:700;color:#F97316;letter-spacing:0.12em">PRO FEATURE</span>',
+            '<div style="width:6px;height:6px;border-radius:50%;background:var(--color-accent);box-shadow:0 0 8px rgba(249,115,22,0.8)"></div>',
+            '<span style="' + F + 'font-size:11px;font-weight:700;color:var(--color-accent);letter-spacing:0.12em">PRO FEATURE</span>',
           '</div>',
-          '<div style="' + FH + 'font-size:38px;font-weight:900;color:#F5F5F5;letter-spacing:0.03em;',
+          '<div style="' + FH + 'font-size:38px;font-weight:900;color:var(--color-text);letter-spacing:0.03em;',
               'line-height:1;margin-bottom:8px">UNLOCK LOCKED PRO</div>',
-          '<p style="' + F + 'color:rgba(148,163,184,0.65);font-size:13px;margin:0 0 20px;line-height:1.55">',
+          '<p style="' + F + 'color:var(--color-text-muted);font-size:13px;margin:0 0 20px;line-height:1.55">',
             'Everything you need to train smarter, eat better,<br>and track every rep.',
           '</p>',
         '</div>',
@@ -629,20 +665,20 @@
         /* pricing cards */
         '<div style="padding:0 16px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr;gap:10px">',
 
-          '<div style="background:#18181B;border:1.5px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px 10px;text-align:center">',
-            '<p style="' + F + 'font-size:10px;color:rgba(148,163,184,0.5);letter-spacing:0.1em;margin-bottom:5px">MONTHLY</p>',
-            '<p style="' + FH + 'font-size:34px;font-weight:900;color:#F5F5F5;letter-spacing:-0.01em;margin-bottom:2px">$6.99</p>',
-            '<p style="' + F + 'font-size:10px;color:rgba(148,163,184,0.4)">per month</p>',
+          '<div style="background:var(--color-shell-fill);border:1.5px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px 10px;text-align:center">',
+            '<p style="' + F + 'font-size:10px;color:var(--color-text-tertiary);letter-spacing:0.1em;margin-bottom:5px">MONTHLY</p>',
+            '<p style="' + FH + 'font-size:34px;font-weight:900;color:var(--color-text);letter-spacing:-0.01em;margin-bottom:2px">$6.99</p>',
+            '<p style="' + F + 'font-size:10px;color:var(--color-text-tertiary)">per month</p>',
           '</div>',
 
           '<div style="background:rgba(249,115,22,0.07);border:1.5px solid rgba(249,115,22,0.4);',
               'border-radius:14px;padding:16px 10px;text-align:center;position:relative;overflow:hidden">',
-            '<div style="position:absolute;top:7px;right:7px;background:#F97316;border-radius:5px;padding:2px 7px">',
-              '<span style="' + F + 'font-size:9px;font-weight:800;color:#fff;letter-spacing:0.05em">SAVE 28%</span>',
+            '<div style="position:absolute;top:7px;right:7px;background:var(--color-accent-deep);border-radius:5px;padding:2px 7px">',
+              '<span style="' + F + 'font-size:11px;font-weight:800;color:#fff;letter-spacing:0.05em">SAVE 28%</span>',
             '</div>',
-            '<p style="' + F + 'font-size:10px;color:rgba(148,163,184,0.5);letter-spacing:0.1em;margin-bottom:5px">ANNUAL</p>',
-            '<p style="' + FH + 'font-size:34px;font-weight:900;color:#F5F5F5;letter-spacing:-0.01em;margin-bottom:2px">$60</p>',
-            '<p style="' + F + 'font-size:10px;color:rgba(148,163,184,0.4)">per year</p>',
+            '<p style="' + F + 'font-size:10px;color:var(--color-text-tertiary);letter-spacing:0.1em;margin-bottom:5px">ANNUAL</p>',
+            '<p style="' + FH + 'font-size:34px;font-weight:900;color:var(--color-text);letter-spacing:-0.01em;margin-bottom:2px">$60</p>',
+            '<p style="' + F + 'font-size:10px;color:var(--color-text-tertiary)">per year</p>',
           '</div>',
 
         '</div>',
@@ -651,15 +687,15 @@
         '<div style="padding:0 16px 16px">',
           '<div style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.14);',
               'border-radius:14px;padding:18px 16px;text-align:center;margin-bottom:10px">',
-            '<p style="' + F + 'font-size:14px;font-weight:700;color:#F5F5F5;margin-bottom:5px">',
+            '<p style="' + F + 'font-size:14px;font-weight:700;color:var(--color-text);margin-bottom:5px">',
               'Available on the App Store Soon',
             '</p>',
-            '<p style="' + F + 'font-size:12px;color:rgba(148,163,184,0.5);line-height:1.5">',
+            '<p style="' + F + 'font-size:12px;color:var(--color-text-tertiary);line-height:1.5">',
               'In-app purchase launches with the iOS app.<br>Keep training — your trial data is saved.',
             '</p>',
           '</div>',
           '<button onclick="document.getElementById(\'locked-paywall\').style.display=\'none\'" ',
-            'style="width:100%;background:transparent;border:none;color:rgba(148,163,184,0.4);',
+            'style="width:100%;background:transparent;border:none;color:var(--color-text-tertiary);',
             F + 'font-size:13px;cursor:pointer;padding:10px 8px">',
             'Continue with free access',
           '</button>',
@@ -683,9 +719,9 @@
   function _paywallCard(title, desc) {
     var F = "font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;";
     return [
-      '<div style="background:#18181B;border:1px solid rgba(255,255,255,0.06);border-radius:11px;padding:11px 10px">',
-        '<p style="' + F + 'font-size:12px;font-weight:700;color:#F5F5F5;margin-bottom:3px">' + title + '</p>',
-        '<p style="' + F + 'font-size:10px;color:rgba(148,163,184,0.5);line-height:1.45">' + desc + '</p>',
+      '<div style="background:var(--color-shell-fill);border:1px solid rgba(255,255,255,0.06);border-radius:11px;padding:11px 10px">',
+        '<p style="' + F + 'font-size:12px;font-weight:700;color:var(--color-text);margin-bottom:3px">' + title + '</p>',
+        '<p style="' + F + 'font-size:10px;color:var(--color-text-tertiary);line-height:1.45">' + desc + '</p>',
       '</div>'
     ].join("");
   }
@@ -713,7 +749,7 @@
     overlay.id = "locked-auth-overlay";
     overlay.style.cssText = [
       "position:fixed","inset:0","z-index:99999",
-      "background:#080809",
+      "background:var(--color-shell-bg)",
       "display:flex","align-items:center","justify-content:center",
       "padding:24px 20px","overflow-y:auto",
       "transition:opacity 0.3s ease"
@@ -742,17 +778,17 @@
 
       /* — Logo — */
       '<div style="text-align:center;margin-bottom:36px">',
-        '<div style="' + FH + 'font-size:68px;font-weight:900;color:#F97316;letter-spacing:0.07em;line-height:1;margin-bottom:6px">LOCKED</div>',
-        '<div style="' + F + 'color:rgba(148,163,184,0.55);font-size:10px;letter-spacing:0.2em">TRACK · TRAIN · DOMINATE</div>',
+        '<div style="' + FH + 'font-size:68px;font-weight:900;color:var(--color-shell-logo);letter-spacing:0.07em;line-height:1;margin-bottom:6px">LOCKED</div>',
+        '<div style="' + F + 'color:var(--color-text-muted);font-size:10px;letter-spacing:0.2em">TRACK · TRAIN · DOMINATE</div>',
       '</div>',
 
       /* — Card — */
-      '<div style="background:#111113;border-radius:22px;padding:26px 22px 28px;border:1px solid rgba(255,255,255,0.07);box-shadow:0 40px 80px rgba(0,0,0,0.65)">',
+      '<div style="background:var(--color-shell-card);border-radius:22px;padding:26px 22px 28px;border:1px solid rgba(255,255,255,0.07);box-shadow:0 40px 80px rgba(0,0,0,0.65)">',
 
         /* Tab switcher */
         '<div style="display:grid;grid-template-columns:1fr 1fr;background:rgba(255,255,255,0.04);border-radius:12px;padding:4px;margin-bottom:26px;gap:4px">',
-          '<button onclick="window.LOCKED._setAuthMode(\'login\')" style="' + FH + 'padding:11px 8px;border:none;border-radius:9px;cursor:pointer;font-size:14px;font-weight:700;letter-spacing:0.07em;transition:all 0.18s ease;' + (isLogin ? 'background:#F97316;color:#fff;box-shadow:0 2px 10px rgba(249,115,22,0.4)' : 'background:transparent;color:rgba(148,163,184,0.55)') + '">SIGN IN</button>',
-          '<button onclick="window.LOCKED._setAuthMode(\'signup\')" style="' + FH + 'padding:11px 8px;border:none;border-radius:9px;cursor:pointer;font-size:14px;font-weight:700;letter-spacing:0.07em;transition:all 0.18s ease;' + (!isLogin ? 'background:#F97316;color:#fff;box-shadow:0 2px 10px rgba(249,115,22,0.4)' : 'background:transparent;color:rgba(148,163,184,0.55)') + '">SIGN UP</button>',
+          '<button onclick="window.LOCKED._setAuthMode(\'login\')" style="' + FH + 'padding:11px 8px;border:none;border-radius:9px;cursor:pointer;font-size:14px;font-weight:700;letter-spacing:0.07em;transition:all 0.18s ease;' + (isLogin ? 'background:var(--color-accent-deep);color:#fff;box-shadow:0 2px 10px rgba(249,115,22,0.4)' : 'background:transparent;color:var(--color-text-muted)') + '">SIGN IN</button>',
+          '<button onclick="window.LOCKED._setAuthMode(\'signup\')" style="' + FH + 'padding:11px 8px;border:none;border-radius:9px;cursor:pointer;font-size:14px;font-weight:700;letter-spacing:0.07em;transition:all 0.18s ease;' + (!isLogin ? 'background:var(--color-accent-deep);color:#fff;box-shadow:0 2px 10px rgba(249,115,22,0.4)' : 'background:transparent;color:var(--color-text-muted)') + '">SIGN UP</button>',
         '</div>',
 
         /* Error area */
@@ -760,16 +796,16 @@
 
         /* Email */
         '<div style="margin-bottom:14px">',
-          '<label style="display:block;' + F + 'color:rgba(148,163,184,0.5);font-size:10px;letter-spacing:0.14em;margin-bottom:7px">EMAIL</label>',
-          '<input id="auth-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px 16px;color:#F5F5F5;font-size:16px;outline:none;' + F + 'transition:border-color 0.2s ease;-webkit-appearance:none" />',
+          '<label style="display:block;' + F + 'color:var(--color-text-tertiary);font-size:10px;letter-spacing:0.14em;margin-bottom:7px">EMAIL</label>',
+          '<input id="auth-email" type="email" inputmode="email" autocomplete="email" enterkeyhint="next" placeholder="you@example.com" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px 16px;color:var(--color-text);font-size:16px;outline:none;' + F + 'transition:border-color 0.2s ease;-webkit-appearance:none" />',
         '</div>',
 
         /* Password */
         '<div style="margin-bottom:' + (isLogin ? '10px' : '10px') + '">',
-          '<label style="display:block;' + F + 'color:rgba(148,163,184,0.5);font-size:10px;letter-spacing:0.14em;margin-bottom:7px">PASSWORD</label>',
+          '<label style="display:block;' + F + 'color:var(--color-text-tertiary);font-size:10px;letter-spacing:0.14em;margin-bottom:7px">PASSWORD</label>',
           '<div style="position:relative">',
-            '<input id="auth-password" type="password" autocomplete="' + (isLogin ? 'current-password' : 'new-password') + '" placeholder="••••••••" oninput="window.LOCKED._validatePw()" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px 48px 14px 16px;color:#F5F5F5;font-size:16px;outline:none;' + F + 'transition:border-color 0.2s ease;-webkit-appearance:none" />',
-            '<button id="auth-pw-eye" onclick="window.LOCKED._togglePw()" style="position:absolute;right:0;top:0;bottom:0;width:48px;background:transparent;border:none;cursor:pointer;color:rgba(148,163,184,0.4);display:flex;align-items:center;justify-content:center;padding:0;transition:color 0.15s ease">',
+            '<input id="auth-password" type="password" autocomplete="' + (isLogin ? 'current-password' : 'new-password') + '" placeholder="••••••••" enterkeyhint="go" oninput="window.LOCKED._validatePw()" onkeydown="if(event.key===&quot;Enter&quot;){event.preventDefault();window.LOCKED._submitAuth(&quot;' + mode + '&quot;);}" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px 48px 14px 16px;color:var(--color-text);font-size:16px;outline:none;' + F + 'transition:border-color 0.2s ease;-webkit-appearance:none" />',
+            '<button id="auth-pw-eye" onclick="window.LOCKED._togglePw()" style="position:absolute;right:0;top:0;bottom:0;width:48px;background:transparent;border:none;cursor:pointer;color:var(--color-text-tertiary);display:flex;align-items:center;justify-content:center;padding:0;transition:color 0.15s ease">',
               '<svg id="auth-pw-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
             '</button>',
           '</div>',
@@ -778,26 +814,26 @@
         /* Password requirements — signup only, update live via _validatePw() */
         (!isLogin
           ? '<div id="auth-pw-reqs" style="display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin-bottom:20px;padding:2px 2px 0">' +
-            '<div id="req-len"   style="' + F + 'font-size:11px;color:rgba(148,163,184,0.35);display:flex;align-items:center;gap:5px;transition:color 0.15s ease"><span id="req-len-dot"   style="font-size:13px;line-height:1">○</span> 8+ characters</div>' +
-            '<div id="req-upper" style="' + F + 'font-size:11px;color:rgba(148,163,184,0.35);display:flex;align-items:center;gap:5px;transition:color 0.15s ease"><span id="req-upper-dot" style="font-size:13px;line-height:1">○</span> Uppercase (A-Z)</div>' +
-            '<div id="req-lower" style="' + F + 'font-size:11px;color:rgba(148,163,184,0.35);display:flex;align-items:center;gap:5px;transition:color 0.15s ease"><span id="req-lower-dot" style="font-size:13px;line-height:1">○</span> Lowercase (a-z)</div>' +
-            '<div id="req-num"   style="' + F + 'font-size:11px;color:rgba(148,163,184,0.35);display:flex;align-items:center;gap:5px;transition:color 0.15s ease"><span id="req-num-dot"   style="font-size:13px;line-height:1">○</span> Number (0-9)</div>' +
+            '<div id="req-len"   style="' + F + 'font-size:11px;color:var(--color-text-tertiary);display:flex;align-items:center;gap:5px;transition:color 0.15s ease"><span id="req-len-dot"   style="font-size:13px;line-height:1">○</span> 8+ characters</div>' +
+            '<div id="req-upper" style="' + F + 'font-size:11px;color:var(--color-text-tertiary);display:flex;align-items:center;gap:5px;transition:color 0.15s ease"><span id="req-upper-dot" style="font-size:13px;line-height:1">○</span> Uppercase (A-Z)</div>' +
+            '<div id="req-lower" style="' + F + 'font-size:11px;color:var(--color-text-tertiary);display:flex;align-items:center;gap:5px;transition:color 0.15s ease"><span id="req-lower-dot" style="font-size:13px;line-height:1">○</span> Lowercase (a-z)</div>' +
+            '<div id="req-num"   style="' + F + 'font-size:11px;color:var(--color-text-tertiary);display:flex;align-items:center;gap:5px;transition:color 0.15s ease"><span id="req-num-dot"   style="font-size:13px;line-height:1">○</span> Number (0-9)</div>' +
             '</div>'
           : '<div style="margin-bottom:12px"></div>'),
 
         /* Forgot (login only) */
         (isLogin
-          ? '<div style="text-align:right;margin-bottom:22px"><button onclick="window.LOCKED._forgotPassword()" style="background:transparent;border:none;color:rgba(148,163,184,0.45);font-size:12px;cursor:pointer;padding:4px 0;' + F + 'transition:color 0.15s ease">Forgot password?</button></div>'
+          ? '<div style="text-align:right;margin-bottom:22px"><button onclick="window.LOCKED._forgotPassword()" style="background:transparent;border:none;color:var(--color-text-tertiary);font-size:12px;cursor:pointer;padding:4px 0;' + F + 'transition:color 0.15s ease">Forgot password?</button></div>'
           : ''),
 
         /* Submit */
-        '<button id="auth-submit" onclick="window.LOCKED._submitAuth(\'' + mode + '\')" style="width:100%;background:#F97316;color:#fff;border:none;border-radius:12px;padding:15px;font-size:18px;font-weight:900;cursor:pointer;' + FH + 'letter-spacing:0.06em;box-shadow:0 4px 18px rgba(249,115,22,0.38);transition:all 0.2s ease;-webkit-appearance:none">' +
+        '<button id="auth-submit" onclick="window.LOCKED._submitAuth(\'' + mode + '\')" style="width:100%;background:var(--color-accent-deep);color:#fff;border:none;border-radius:12px;padding:15px;font-size:18px;font-weight:900;cursor:pointer;' + FH + 'letter-spacing:0.06em;box-shadow:0 4px 18px rgba(249,115,22,0.38);transition:all 0.2s ease;-webkit-appearance:none">' +
           (isLogin ? 'SIGN IN' : 'CREATE ACCOUNT') +
         '</button>',
 
         /* Trial note */
         (!isLogin
-          ? '<div style="text-align:center;margin-top:15px;' + F + 'color:rgba(148,163,184,0.4);font-size:12px">14-day free trial · No credit card required</div>'
+          ? '<div style="text-align:center;margin-top:15px;' + F + 'color:var(--color-text-tertiary);font-size:12px">14-day free trial · No credit card required</div>'
           : ''),
 
       '</div>',
@@ -805,7 +841,7 @@
       /* — Guest entry (login mode) — */
       (isLogin
         ? '<div style="text-align:center;margin-top:20px">' +
-            '<button onclick="window.LOCKED._showGuestModal()" style="' + F + 'background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:13px 26px;color:rgba(148,163,184,0.85);font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s ease;-webkit-appearance:none">Continue without account</button>' +
+            '<button onclick="window.LOCKED._showGuestModal()" style="' + F + 'background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:13px 26px;color:var(--color-text-muted);font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s ease;-webkit-appearance:none">Continue without account</button>' +
           '</div>'
         : ''),
 
@@ -827,11 +863,11 @@
       "display:flex","align-items:center","justify-content:center","padding:24px"
     ].join(";");
     m.innerHTML =
-      '<div style="background:#111113;border:1px solid rgba(255,255,255,0.08);border-radius:22px;padding:28px 24px;max-width:360px;width:100%;box-shadow:0 40px 80px rgba(0,0,0,0.6)">' +
-        '<div style="' + FH + 'font-size:24px;font-weight:800;color:#F5F5F5;letter-spacing:0.04em;margin-bottom:10px">CONTINUE AS GUEST</div>' +
-        '<p style="' + F + 'color:#9CA3AF;font-size:14px;line-height:1.6;margin:0 0 22px">Your data will be stored on this device only. It will not back up to the cloud. Create an account anytime to enable cloud backup.</p>' +
-        '<button onclick="window.LOCKED.enterGuest()" style="' + FH + 'width:100%;background:#F97316;color:#fff;border:none;border-radius:12px;padding:15px;font-size:17px;font-weight:800;letter-spacing:0.06em;cursor:pointer;box-shadow:0 4px 18px rgba(249,115,22,0.38);margin-bottom:10px;-webkit-appearance:none">CONTINUE AS GUEST</button>' +
-        '<button onclick="window.LOCKED._hideGuestModal();window.LOCKED._setAuthMode(\'signup\')" style="' + FH + 'width:100%;background:rgba(255,255,255,0.05);color:#9CA3AF;border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px;font-size:16px;font-weight:700;letter-spacing:0.06em;cursor:pointer;-webkit-appearance:none">CREATE ACCOUNT</button>' +
+      '<div style="background:var(--color-shell-card);border:1px solid rgba(255,255,255,0.08);border-radius:22px;padding:28px 24px;max-width:360px;width:100%;box-shadow:0 40px 80px rgba(0,0,0,0.6)">' +
+        '<div style="' + FH + 'font-size:24px;font-weight:800;color:var(--color-text);letter-spacing:0.04em;margin-bottom:10px">CONTINUE AS GUEST</div>' +
+        '<p style="' + F + 'color:var(--color-text-muted);font-size:14px;line-height:1.6;margin:0 0 22px">Your data will be stored on this device only. It will not back up to the cloud. Create an account anytime to enable cloud backup.</p>' +
+        '<button onclick="window.LOCKED.enterGuest()" style="' + FH + 'width:100%;background:var(--color-accent-deep);color:#fff;border:none;border-radius:12px;padding:15px;font-size:17px;font-weight:800;letter-spacing:0.06em;cursor:pointer;box-shadow:0 4px 18px rgba(249,115,22,0.38);margin-bottom:10px;-webkit-appearance:none">CONTINUE AS GUEST</button>' +
+        '<button onclick="window.LOCKED._hideGuestModal();window.LOCKED._setAuthMode(\'signup\')" style="' + FH + 'width:100%;background:rgba(255,255,255,0.05);color:var(--color-text-muted);border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:14px;font-size:16px;font-weight:700;letter-spacing:0.06em;cursor:pointer;-webkit-appearance:none">CREATE ACCOUNT</button>' +
       '</div>';
     m.addEventListener("click", function (e) { if (e.target === m) _hideGuestModal(); });
     document.body.appendChild(m);
@@ -849,20 +885,20 @@
       '<div style="width:100%;max-width:390px;position:relative;z-index:1;padding-top:8px">',
 
       '<div style="text-align:center;margin-bottom:36px">',
-        '<div style="' + FH + 'font-size:68px;font-weight:900;color:#F97316;letter-spacing:0.07em;line-height:1">LOCKED</div>',
+        '<div style="' + FH + 'font-size:68px;font-weight:900;color:var(--color-shell-logo);letter-spacing:0.07em;line-height:1">LOCKED</div>',
       '</div>',
 
-      '<div style="background:#111113;border-radius:22px;padding:36px 24px 32px;text-align:center;border:1px solid rgba(255,255,255,0.07);box-shadow:0 40px 80px rgba(0,0,0,0.65)">',
+      '<div style="background:var(--color-shell-card);border-radius:22px;padding:36px 24px 32px;text-align:center;border:1px solid rgba(255,255,255,0.07);box-shadow:0 40px 80px rgba(0,0,0,0.65)">',
 
         '<div style="width:60px;height:60px;background:rgba(249,115,22,0.1);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;border:1px solid rgba(249,115,22,0.18)">',
-          '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#F97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
+          '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>',
         '</div>',
 
-        '<div style="' + FH + 'font-size:28px;font-weight:800;color:#F5F5F5;letter-spacing:0.04em;margin-bottom:10px">CHECK YOUR INBOX</div>',
-        '<div style="' + F + 'color:rgba(148,163,184,0.65);font-size:14px;line-height:1.65;margin-bottom:28px">We sent a link to<br><span style="color:#F5F5F5;font-weight:600">' + (_pendingEmail || "your email") + '</span><br>Click it to confirm your account.</div>',
+        '<div style="' + FH + 'font-size:28px;font-weight:800;color:var(--color-text);letter-spacing:0.04em;margin-bottom:10px">CHECK YOUR INBOX</div>',
+        '<div style="' + F + 'color:var(--color-text-muted);font-size:14px;line-height:1.65;margin-bottom:28px">We sent a link to<br><span style="color:var(--color-text);font-weight:600">' + (_pendingEmail || "your email") + '</span><br>Click it to confirm your account.</div>',
 
-        '<button onclick="window.LOCKED._resendConfirmation()" style="width:100%;background:rgba(255,255,255,0.05);color:#F5F5F5;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:12px;' + F + 'transition:all 0.2s ease">Resend confirmation email</button>',
-        '<button onclick="window.LOCKED._setAuthMode(\'login\')" style="background:transparent;border:none;color:rgba(148,163,184,0.45);font-size:13px;cursor:pointer;padding:8px;' + F + '">← Back to sign in</button>',
+        '<button onclick="window.LOCKED._resendConfirmation()" style="width:100%;background:rgba(255,255,255,0.05);color:var(--color-text);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:12px;' + F + 'transition:all 0.2s ease">Resend confirmation email</button>',
+        '<button onclick="window.LOCKED._setAuthMode(\'login\')" style="background:transparent;border:none;color:var(--color-text-tertiary);font-size:13px;cursor:pointer;padding:8px;' + F + '">← Back to sign in</button>',
 
       '</div>',
       '</div>'
@@ -884,7 +920,7 @@
     var inp = document.getElementById("auth-password");
     var eye = document.getElementById("auth-pw-eye");
     if (inp) inp.type = _pwVisible ? "text" : "password";
-    if (eye) eye.style.color = _pwVisible ? "#F97316" : "rgba(148,163,184,0.4)";
+    if (eye) eye.style.color = _pwVisible ? "var(--color-accent)" : "var(--color-text-tertiary)";
   }
 
   async function _submitAuth(mode) {
@@ -1014,7 +1050,7 @@
       var dot = document.getElementById(c.dotId);
       var row = document.getElementById(c.rowId);
       if (dot) dot.textContent = c.ok ? "✓" : "○";
-      if (row) row.style.color = c.ok ? "#10B981" : "rgba(148,163,184,0.35)";
+      if (row) row.style.color = c.ok ? "#10B981" : "var(--color-text-tertiary)";
     });
   }
 
@@ -1046,13 +1082,16 @@
     var toast = document.createElement("div");
     toast.style.cssText = [
       "position:fixed","bottom:90px","left:50%","transform:translateX(-50%)",
-      "z-index:99999","background:" + (type === "success" ? T.green : T.red),
+      "z-index:99999","background:" + (type === "success" ? "#178841" : "#B91C1C"),
       "color:#fff","font-family:" + T.font,"font-size:14px","font-weight:600",
       "padding:12px 20px","border-radius:10px","max-width:280px",
       "text-align:center","box-shadow:0 4px 20px rgba(0,0,0,0.4)",
       "transition:opacity 0.3s ease"
     ].join(";");
     toast.textContent = message;
+    /* Implicit polite live region: the toast is this app's only confirmation
+       channel, so it has to reach assistive tech, not just the eye. */
+    toast.setAttribute("role", "status");
     document.body.appendChild(toast);
     setTimeout(function () {
       toast.style.opacity = "0";
@@ -1136,7 +1175,27 @@
 })();
   </script>
   <style>
-    html,body{margin:0;padding:0;background:#080809;min-height:100vh;overflow-x:hidden;}
+    /* Design tokens, defined here rather than only in the JS CSS array, so the
+       pre-React auth/paywall shell can use them and follow the chosen theme.
+       Values mirror the html{} and html.light-mode{} rules in `var CSS` —
+       keep the two in sync. */
+    html{--color-bg:#000000;--color-surface:#0D0D0F;--color-card:#1C1C1E;
+      --color-border:rgba(255,255,255,0.09);--color-text:#F5F5F7;
+      --color-text-muted:#A1A1AA;--color-text-tertiary:#8E8E93;
+      --color-accent:#F97316;--color-accent-deep:#C2410C;
+      --color-success-deep:#178841;--color-error-deep:#B91C1C;
+      --color-shell-bg:#080809;--color-shell-logo:#F97316;--color-shell-card:#111113;--color-shell-fill:#18181B;}
+    html.light-mode,html[data-style-profile='light']{--color-bg:#F2F2F7;
+      --color-surface:#F2F2F7;--color-card:#FFFFFF;
+      --color-border:rgba(60,60,67,0.12);--color-text:#1C1C1E;
+      --color-text-muted:#5F5F66;--color-text-tertiary:#6C6C70;
+      --color-shell-bg:#F2F2F7;--color-shell-logo:#C2410C;--color-shell-card:#FFFFFF;--color-shell-fill:#E9E9EF;}
+    html,body{margin:0;padding:0;background:var(--color-shell-bg);min-height:100vh;overflow-x:hidden;overflow-x:clip;}
+    /* hidden turns body into a scroll container, which detaches every
+       position:sticky header from the viewport scroll (they simply never
+       stick). clip gives the same horizontal guard without creating a scroll
+       container; the hidden line before it is the fallback for engines
+       without clip. */
     @supports (min-height:100dvh){html,body{min-height:100dvh;}}
     /* The app shell must not be a scroll container: on iOS an ancestor with
        overflow set turns position:fixed children loose, which is how the
@@ -1149,8 +1208,12 @@
        only the pane in the middle scrolls. No overflow on the column itself
        — its children are sized so nothing can escape, which keeps iOS's
        fixed-position handling out of the picture entirely. */
-    .lk-appcol{height:calc(100vh - 80px - env(safe-area-inset-bottom, 0px));display:flex;flex-direction:column;}
-    @supports (height:100dvh){.lk-appcol{height:calc(100dvh - 80px - env(safe-area-inset-bottom, 0px));}}
+    /* The bar is sized by its labels, so the column subtracts its measured
+       height (published as --lk-nav-h by the Nav component) rather than a
+       constant that was already wrong on a notch phone. The env() fallback
+       only applies before the first measurement. */
+    .lk-appcol{height:calc(100vh - var(--lk-nav-h, calc(80px + env(safe-area-inset-bottom, 0px))));display:flex;flex-direction:column;}
+    @supports (height:100dvh){.lk-appcol{height:calc(100dvh - var(--lk-nav-h, calc(80px + env(safe-area-inset-bottom, 0px))));}}
     .lk-appcol-scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;}
     *{-webkit-tap-highlight-color:transparent;}
   </style>
@@ -1814,6 +1877,9 @@ var GR = "var(--color-success)",
   GR_D = "var(--color-success-deep)",
   RE = "var(--color-error)",
   BLU = "var(--color-info)";
+/* Hex, not the token: this one is concatenated with an alpha suffix
+   (OR_H + "18"), and "var(--color-accent)18" is not a colour - the
+   browser drops the whole declaration. */
 var OR_H = "#F97316",
   ORD_H = "#7C3A0E",
   GR_H = "#22C55E",
@@ -1922,6 +1988,40 @@ var T_LARGE = 34,
   T_CAP = 12,
   T_CAP2 = 11;
 var FONT_D = "inherit";
+/* Tab state. Only the active tab is mounted and it is keyed by screen, so
+   every tab switch remounted the hub and reset its sub-tab and drill-down:
+   leaving Fuel mid-scan and coming back dropped you on the Log list. These
+   persist the hub's own position the same way splitsExpanded already is, and
+   listen for the tab-root reset that tapping the active tab dispatches. */
+function useHubState(key, initial, allowed) {
+  var [value, setValue] = useState(function () {
+    var v = ld("ui_" + key, initial);
+    /* A remembered position can outlive the thing it pointed at - a sub-tab
+       that is gated behind a setting since turned off would render an empty
+       pane. Fall back rather than restore something that no longer exists. */
+    if (allowed && allowed.indexOf(v) === -1) return initial;
+    return v;
+  });
+  var ref = useRef(value);
+  ref.current = value;
+  function set(next) {
+    var v = typeof next === "function" ? next(ref.current) : next;
+    ref.current = v;
+    sd("ui_" + key, v);
+    setValue(v);
+  }
+  return [value, set];
+}
+function useTabReset(screen, reset) {
+  useEffect(function () {
+    function onReset(e) {
+      if (e.detail === screen) reset();
+    }
+    window.addEventListener("lockedTabReset", onReset);
+    return function () { window.removeEventListener("lockedTabReset", onReset); };
+  });
+}
+
 function useSheetDrag(onClose) {
   var elRef = useRef(null);
   var st = useRef({
@@ -1966,6 +2066,10 @@ function useSheetDrag(onClose) {
       cancelAnimationFrame(st.current.raf);
       st.current.raf = null;
     }
+    /* The entry keyframe animates the same transform this drag writes, and a
+       running animation wins, so without this the sheet ignores the finger
+       for its first half second. Cancelling it hands control over at once. */
+    if (elRef.current) elRef.current.style.animation = "none";
     st.current = {
       y0: t.clientY - st.current.dy,
       dy: st.current.dy,
@@ -2009,8 +2113,22 @@ function useSheetDrag(onClose) {
       springTo(0, 0, null);
     }
   }
+  /* Dismissing by tapping Close or the backdrop went straight to onClose, so
+     every sheet made a half-second entrance and then simply vanished. This is
+     the exit the drag gesture already had; routing every dismissal through it
+     makes the two paths one. */
+  function close() {
+    var h = elRef.current ? elRef.current.offsetHeight : 400;
+    if (elRef.current) elRef.current.style.animation = "none";
+    springTo(h + 40, 600, function () {
+      setY(0);
+      onClose();
+    });
+  }
+
   return {
     ref: elRef,
+    close: close,
     zone: {
       onTouchStart: start,
       onTouchMove: move,
@@ -2022,7 +2140,7 @@ function useSheetDrag(onClose) {
     }
   };
 }
-var CSS = ["*{box-sizing:border-box;margin:0;padding:0;}", "html{color-scheme:dark light;--color-bg:#000000;--color-surface:#0D0D0F;--color-card:#1C1C1E;--color-border:rgba(255,255,255,0.09);--color-text:#F5F5F7;--color-text-muted:#A1A1AA;--color-text-subtle:#2C2C2E;--color-accent:#F97316;--color-accent-dark:#7C3A0E;--color-success:#22C55E;--color-success-deep:#178841;--color-error:#F05151;--color-info:#4186F6;--color-shadow:rgba(0,0,0,0.5);--color-shadow-light:rgba(0,0,0,0.18);--color-warning:#F59E0B;--color-feature:#8B5CF6;--color-macro-protein:#3B82F6;--color-macro-carbs:#F59E0B;--color-macro-fat:#EC4899;--color-positive-alt:#10B981;--color-positive-alt-deep:#0C875E;--color-accent-deep:#C2410C;--color-accent-text:#FB923C;--color-accent-rgb:249,115,22;--color-text-tertiary:#8E8E93;--glass-bar:rgba(0,0,0,0.78);--color-fill1:#111113;--color-fill2:#18181B;--color-fill3:#2A2A2F;}", "html.light-mode,html[data-style-profile='light']{--color-bg:#F2F2F7;--color-surface:#F2F2F7;--color-card:#FFFFFF;--color-border:rgba(60,60,67,0.12);--color-text:#1C1C1E;--color-text-muted:#63636B;--color-text-subtle:#E5E5EA;--color-shadow:rgba(15,23,42,0.10);--color-shadow-light:rgba(15,23,42,0.06);--color-accent-text:#C2410C;--color-warning:#B45309;--color-success:#15803D;--color-success-deep:#15803D;--color-error:#DC2626;--color-info:#2563EB;--color-feature:#6D28D9;--color-macro-protein:#2563EB;--color-macro-carbs:#B45309;--color-macro-fat:#BE185D;--color-positive-alt:#047857;--color-positive-alt-deep:#046148;--color-text-tertiary:#86868B;--glass-bar:rgba(242,242,247,0.85);--color-fill1:#E4E6E9;--color-fill2:#F0F2F5;--color-fill3:#D4D8DF;}", "html.light-mode nav,html[data-style-profile='light'] nav{background:rgba(242,242,247,0.82)!important;}", "body{background:var(--color-bg);color:var(--color-text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;font-size:1.0625rem;line-height:1.5;transition:background-color 0.3s ease,color 0.3s ease;}", "::-webkit-scrollbar{display:none;}", "input,textarea,button,select{font-family:inherit;font-size:inherit;}", "input,textarea{-webkit-user-select:text;user-select:text;}", "@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}", "@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}", "@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}", "@keyframes slideDownBanner{from{transform:translateX(-50%) translateY(-100%)}to{transform:translateX(-50%) translateY(0)}}", "@keyframes slideFromTop{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}", "@keyframes shimmer{0%{background-position:-1000px 0}100%{background-position:1000px 0}}", "@keyframes tutFadeIn{from{opacity:0}to{opacity:1}}", "@keyframes tutFadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}", "@keyframes tutIconIn{0%{opacity:0;transform:scale(0.3)}55%{transform:scale(1.14)}80%{transform:scale(0.96)}100%{opacity:1;transform:scale(1)}}", "@keyframes tutPulseGlow{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:1;transform:scale(1.18)}}", "@keyframes tutGridMove{from{transform:translate(0,0)}to{transform:translate(40px,40px)}}", "@keyframes tutCursor{0%,100%{opacity:1}50%{opacity:0}}", "@keyframes tutCircleDraw{to{stroke-dashoffset:0}}", "@keyframes tutCheckDraw{to{stroke-dashoffset:0}}", "@keyframes lockBodyIn{0%{transform:scale(0.78);opacity:0}55%{transform:scale(1.06);opacity:1}78%{transform:scale(0.97)}100%{transform:scale(1)}}", "@keyframes lockShackleRotate{0%{transform:rotateZ(-82deg)}25%{transform:rotateZ(-95deg)}50%{transform:rotateZ(82deg)}75%{transform:rotateZ(8deg)}100%{transform:rotateZ(0deg)}}", "@keyframes lockShackleOpen{0%{transform:rotateZ(-85deg)}100%{transform:rotateZ(-85deg)}}", "@keyframes lockRingExpand{0%{transform:scale(0.4);opacity:0.85}100%{transform:scale(2.2);opacity:0}}", "@keyframes lockRingExpand2{0%{transform:scale(0.4);opacity:0.5}100%{transform:scale(2.8);opacity:0}}", "@keyframes lockFinalGlow{0%{filter:drop-shadow(0 0 0px transparent)}60%{filter:drop-shadow(0 0 24px rgba(249,115,22,0.85))}100%{filter:drop-shadow(0 0 10px rgba(249,115,22,0.35))}}", "@keyframes tutButtonGlow{0%,100%{box-shadow:0 0 30px rgba(249,115,22,0.45)}50%{box-shadow:0 0 60px rgba(249,115,22,0.85)}}", "@keyframes tutP1{to{opacity:0;transform:translate(-90px,-90px) scale(0)}}", "@keyframes tutP2{to{opacity:0;transform:translate(90px,-90px) scale(0)}}", "@keyframes tutP3{to{opacity:0;transform:translate(0,-120px) scale(0)}}", "@keyframes tutP4{to{opacity:0;transform:translate(120px,0) scale(0)}}", "@keyframes tutP5{to{opacity:0;transform:translate(-120px,0) scale(0)}}", "@keyframes tutP6{to{opacity:0;transform:translate(80px,90px) scale(0)}}", "@keyframes tutP7{to{opacity:0;transform:translate(-80px,90px) scale(0)}}", "@keyframes tutP8{to{opacity:0;transform:translate(50px,-130px) scale(0)}}", "@keyframes tutP9{to{opacity:0;transform:translate(-50px,-130px) scale(0)}}", "@keyframes tutP10{to{opacity:0;transform:translate(130px,50px) scale(0)}}", "@keyframes tutP11{to{opacity:0;transform:translate(-130px,50px) scale(0)}}", "@keyframes tutP12{to{opacity:0;transform:translate(0,130px) scale(0)}}", "@keyframes scalePopOut{0%{transform:scale(0.8);opacity:0}50%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}", "@keyframes ceGlow{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:.85;transform:scale(1.06)}}", "@keyframes ceSegIn{from{opacity:0;transform:scaleX(.2)}to{opacity:1;transform:scaleX(1)}}",
+var CSS = ["*{box-sizing:border-box;margin:0;padding:0;}", "html{color-scheme:dark light;--color-bg:#000000;--color-surface:#0D0D0F;--color-card:#1C1C1E;--color-border:rgba(255,255,255,0.09);--color-text:#F5F5F7;--color-text-muted:#A1A1AA;--color-text-subtle:#2C2C2E;--color-accent:#F97316;--color-accent-dark:#7C3A0E;--color-success:#22C55E;--color-success-deep:#178841;--color-error:#F05151;--color-info:#4186F6;--color-shadow:rgba(0,0,0,0.5);--color-shadow-light:rgba(0,0,0,0.18);--color-warning:#F59E0B;--color-feature:#8B5CF6;--color-macro-protein:#3B82F6;--color-macro-carbs:#F59E0B;--color-macro-fat:#EC4899;--color-positive-alt:#10B981;--color-positive-alt-deep:#0C875E;--color-accent-deep:#C2410C;--color-accent-text:#FB923C;--color-accent-rgb:249,115,22;--color-text-tertiary:#8E8E93;--glass-bar:rgba(0,0,0,0.78);--color-fill1:#111113;--color-fill2:#18181B;--color-fill3:#2A2A2F;}", "html.light-mode,html[data-style-profile='light']{--color-bg:#F2F2F7;--color-surface:#F2F2F7;--color-card:#FFFFFF;--color-border:rgba(60,60,67,0.12);--color-text:#1C1C1E;--color-text-muted:#5F5F66;--color-text-subtle:#E5E5EA;--color-shadow:rgba(15,23,42,0.10);--color-shadow-light:rgba(15,23,42,0.06);--color-accent-text:#9A3412;--color-warning:#B45309;--color-success:#15803D;--color-success-deep:#15803D;--color-error:#DC2626;--color-info:#2563EB;--color-feature:#6D28D9;--color-macro-protein:#2563EB;--color-macro-carbs:#B45309;--color-macro-fat:#BE185D;--color-positive-alt:#047857;--color-positive-alt-deep:#046148;--color-text-tertiary:#6C6C70;--glass-bar:rgba(242,242,247,0.85);--color-fill1:#E4E6E9;--color-fill2:#F0F2F5;--color-fill3:#D4D8DF;}", "html.light-mode nav,html[data-style-profile='light'] nav{background:rgba(242,242,247,0.82)!important;}", "body{background:var(--color-bg);color:var(--color-text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;font-size:1.0625rem;line-height:1.5;transition:background-color 0.3s ease,color 0.3s ease;}", "::-webkit-scrollbar{display:none;}", "html.lk-kb-open nav{display:none;}", "[style*='overflow-y: auto'],[style*='overflowY: auto'],[style*='overflow: auto']{overscroll-behavior:contain;}", "input,textarea,button,select{font-family:inherit;font-size:inherit;}", "input,textarea{-webkit-user-select:text;user-select:text;}", "@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}", "@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}", "@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}", "@keyframes slideDownBanner{from{transform:translateX(-50%) translateY(-100%)}to{transform:translateX(-50%) translateY(0)}}", "@keyframes slideFromTop{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}", "@keyframes shimmer{0%{background-position:-1000px 0}100%{background-position:1000px 0}}", "@keyframes tutFadeIn{from{opacity:0}to{opacity:1}}", "@keyframes tutFadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}", "@keyframes tutIconIn{0%{opacity:0;transform:scale(0.3)}55%{transform:scale(1.14)}80%{transform:scale(0.96)}100%{opacity:1;transform:scale(1)}}", "@keyframes tutPulseGlow{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:1;transform:scale(1.18)}}", "@keyframes tutGridMove{from{transform:translate(0,0)}to{transform:translate(40px,40px)}}", "@keyframes tutCursor{0%,100%{opacity:1}50%{opacity:0}}", "@keyframes tutCircleDraw{to{stroke-dashoffset:0}}", "@keyframes tutCheckDraw{to{stroke-dashoffset:0}}", "@keyframes lockBodyIn{0%{transform:scale(0.78);opacity:0}55%{transform:scale(1.06);opacity:1}78%{transform:scale(0.97)}100%{transform:scale(1)}}", "@keyframes lockShackleRotate{0%{transform:rotateZ(-82deg)}25%{transform:rotateZ(-95deg)}50%{transform:rotateZ(82deg)}75%{transform:rotateZ(8deg)}100%{transform:rotateZ(0deg)}}", "@keyframes lockShackleOpen{0%{transform:rotateZ(-85deg)}100%{transform:rotateZ(-85deg)}}", "@keyframes lockRingExpand{0%{transform:scale(0.4);opacity:0.85}100%{transform:scale(2.2);opacity:0}}", "@keyframes lockRingExpand2{0%{transform:scale(0.4);opacity:0.5}100%{transform:scale(2.8);opacity:0}}", "@keyframes lockFinalGlow{0%{filter:drop-shadow(0 0 0px transparent)}60%{filter:drop-shadow(0 0 24px rgba(249,115,22,0.85))}100%{filter:drop-shadow(0 0 10px rgba(249,115,22,0.35))}}", "@keyframes tutButtonGlow{0%,100%{box-shadow:0 0 30px rgba(249,115,22,0.45)}50%{box-shadow:0 0 60px rgba(249,115,22,0.85)}}", "@keyframes tutP1{to{opacity:0;transform:translate(-90px,-90px) scale(0)}}", "@keyframes tutP2{to{opacity:0;transform:translate(90px,-90px) scale(0)}}", "@keyframes tutP3{to{opacity:0;transform:translate(0,-120px) scale(0)}}", "@keyframes tutP4{to{opacity:0;transform:translate(120px,0) scale(0)}}", "@keyframes tutP5{to{opacity:0;transform:translate(-120px,0) scale(0)}}", "@keyframes tutP6{to{opacity:0;transform:translate(80px,90px) scale(0)}}", "@keyframes tutP7{to{opacity:0;transform:translate(-80px,90px) scale(0)}}", "@keyframes tutP8{to{opacity:0;transform:translate(50px,-130px) scale(0)}}", "@keyframes tutP9{to{opacity:0;transform:translate(-50px,-130px) scale(0)}}", "@keyframes tutP10{to{opacity:0;transform:translate(130px,50px) scale(0)}}", "@keyframes tutP11{to{opacity:0;transform:translate(-130px,50px) scale(0)}}", "@keyframes tutP12{to{opacity:0;transform:translate(0,130px) scale(0)}}", "@keyframes scalePopOut{0%{transform:scale(0.8);opacity:0}50%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}", "@keyframes ceGlow{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:.85;transform:scale(1.06)}}", "@keyframes ceSegIn{from{opacity:0;transform:scaleX(.2)}to{opacity:1;transform:scaleX(1)}}",
 /* ── Hold-menu motion ──────────────────────────────────────────────────
    Apple's interface motion is spring-driven: a mass on a spring released
    from rest, which overshoots slightly and settles, rather than a curve
@@ -2050,7 +2168,7 @@ var CSS = ["*{box-sizing:border-box;margin:0;padding:0;}", "html{color-scheme:da
 "@supports (animation-timing-function:linear(0,1)){" +
   ".lk-pop{animation-duration:.745s;animation-timing-function:linear(0,0.0764,0.2508,0.4585,0.6565,0.8211,0.9429,1.0226,1.0662,1.0826,1.0806,1.0681,1.0513,1.0341,1.0193,1.0079,1,0.9954,0.9934,0.9931,0.9939,0.9952,0.9967,0.998,0.9991,0.9998,1);}" +
   ".lk-rise{animation-duration:.479s;animation-timing-function:linear(0,0.0656,0.2115,0.383,0.5478,0.6894,0.8019,0.8854,0.9436,0.9813,1.0037,1.0152,1.0195,1.0195,1.0172,1.0139,1.0105,1.0074,1.0049,1.003,1.0016,1.0007,1);}" +
-"}", "@keyframes glowPulse{0%,100%{box-shadow:0 0 20px rgba(249,115,22,0.4)}50%{box-shadow:0 0 40px rgba(249,115,22,0.8)}}", "@keyframes checkPulse{0%{transform:scale(1)}50%{transform:scale(1.3)}100%{transform:scale(1)}}", "@keyframes jiggle{0%,100%{transform:rotate(0deg)}25%{transform:rotate(-1.2deg)}75%{transform:rotate(1.2deg)}}", "@keyframes partialsFlash{0%{transform:scale(1)}40%{transform:scale(1.55);background:var(--color-accent);color:#fff;border-color:var(--color-accent)}100%{transform:scale(1)}}", "@keyframes spin{to{transform:rotate(360deg)}}", "@keyframes progressArc{from{stroke-dashoffset:565}to{stroke-dashoffset:0}}", "/* ── Design system v3 ────────────────────────────────────────────────    Apple-style composition layer: grouped surfaces, a real type scale and    a spacing rhythm. Colours above are unchanged so nothing regresses;    these are additive tokens the DS primitives consume. */ :root {   /* grouped-inset surfaces (iOS Settings / Health pattern) */   --ds-grouped: #000000;   --ds-elevated: #1C1C1E;   --ds-elevated-2: #2C2C2E;   --ds-separator: rgba(84,84,88,0.34);   --ds-fill: rgba(120,120,128,0.20);   --ds-fill-soft: rgba(120,120,128,0.12);   --ds-material: rgba(30,30,32,0.72);    /* type scale */   --ds-t-large: 34px;   /* large title */   --ds-t-title: 26px;   --ds-t-head: 20px;   --ds-t-body: 16px;   --ds-t-sub: 15px;   --ds-t-foot: 13px;   --ds-t-cap: 12px;   --ds-t-cap2: 11px;    /* spacing rhythm */   --ds-s1: 4px;  --ds-s2: 8px;  --ds-s3: 12px;   --ds-s4: 16px; --ds-s5: 20px; --ds-s6: 24px; --ds-s8: 32px;    /* radii */   --ds-r-sm: 10px; --ds-r-md: 14px; --ds-r-lg: 18px; --ds-r-xl: 22px; } html.light-mode {   --ds-grouped: #F2F2F7;   --ds-elevated: #FFFFFF;   --ds-elevated-2: #F2F2F7;   --ds-separator: rgba(60,60,67,0.20);   --ds-fill: rgba(120,120,128,0.16);   --ds-fill-soft: rgba(120,120,128,0.08);   --ds-material: rgba(255,255,255,0.78); }  /* Numerals line up in columns wherever they're compared */ .ds-num { font-variant-numeric: tabular-nums; }  /* Grouped list: rows separated by inset hairlines, not boxed individually */ .ds-list > * + * { border-top: 0.5px solid var(--ds-separator); }  /* Large title that settles as you scroll */ .ds-largetitle {   font-family: \"Barlow Condensed\", sans-serif;   font-size: var(--ds-t-large);   font-weight: 800;   letter-spacing: 0.02em;   line-height: 1.05;   color: var(--color-text);   margin: 0; } .ds-section-hd {   font-size: var(--ds-t-cap2);   font-weight: 600;   letter-spacing: 0.06em;   text-transform: uppercase;   color: var(--color-text-muted);   margin: 0 0 var(--ds-s2);   padding-left: var(--ds-s1); } @media (prefers-reduced-motion: reduce) {   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } } ", "html.theme-slate,html[data-style-profile='slate']{--ds-grouped:#0D1117;--ds-elevated:#21262D;--ds-elevated-2:#2D333B;--ds-sep:rgba(48,54,61,0.9);--ds-fill:rgba(139,148,158,0.16);--ds-fill-soft:rgba(139,148,158,0.09);--ds-material:rgba(13,17,23,0.72);}", "html.theme-navy,html[data-style-profile='navy']{--ds-grouped:#070F1E;--ds-elevated:#112035;--ds-elevated-2:#16294280;--ds-sep:rgba(56,139,253,0.14);--ds-fill:rgba(107,145,190,0.16);--ds-fill-soft:rgba(107,145,190,0.09);--ds-material:rgba(7,15,30,0.75);}", "html.theme-midnight,html[data-style-profile='midnight']{--ds-grouped:#0C0917;--ds-elevated:#1C183A;--ds-elevated-2:#241E47;--ds-sep:rgba(139,92,246,0.16);--ds-fill:rgba(167,155,204,0.16);--ds-fill-soft:rgba(167,155,204,0.09);--ds-material:rgba(12,9,23,0.75);}", "@media (prefers-reduced-motion:reduce){*{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}}", "[style*='color: var(--color-accent)']{color:var(--color-accent-text)!important;}", "[style*='color: rgb(249, 115, 22)']{color:var(--color-accent-text)!important;}", "button[style*='background: var(--color-accent)'][style*='color: rgb(255, 255, 255)'],button[style*='background: var(--color-accent)'][style*='color: #fff']{background:var(--color-accent-deep)!important;}", "@media (prefers-reduced-transparency:reduce){nav,[style*='backdrop-filter'],[style*='var(--glass-bar)'],[style*='rgba(8, 8, 9']{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:var(--color-surface)!important;}}", "button,a,[role=button]{transition:transform .15s ease-out,box-shadow .15s ease-out,background-color .2s ease,color .2s ease,border-color .2s ease,opacity .2s ease;}", "@media (hover:hover) and (pointer:fine){button:hover,a:hover,[role=button]:hover{transform:translateY(-1px);box-shadow:0 4px 14px var(--color-shadow);}}", "button:active,[role=button]:active{transform:scale(0.97);transition-duration:.08s;box-shadow:0 1px 4px var(--color-shadow);}", "button:focus,a:focus,[role=button]:focus{outline:none;box-shadow:inset 0 0 0 2px rgba(var(--color-accent-rgb),0.5);}", "input:focus,textarea:focus,select:focus{transition:all 0.2s ease;box-shadow:inset 0 0 0 2px rgba(var(--color-accent-rgb),0.4),0 0 0 3px rgba(var(--color-accent-rgb),0.1);}", "[style*='background']{transition:background-color 0.24s ease,box-shadow 0.24s ease;}", "p{line-height:1.6;}", "[style*='border-radius'][style*='cursor: pointer']:hover{box-shadow:0 4px 16px var(--color-shadow);}", "h1,h2,h3,h4,h5,h6{font-weight:700;line-height:1.2;}", "[style*='border:1px']{transition:all 0.24s ease;border-color:rgba(36,36,40,0.8);}", "html.light-mode [style*='border:1px'],html[data-style-profile='light'] [style*='border:1px']{border-color:rgba(60,60,67,0.12)!important;}", "button:disabled{opacity:0.4;cursor:not-allowed;transform:none;}", "button,[role=button]{position:relative;}", "input:not([type=checkbox]):not([type=radio]),select{min-height:44px;}", "input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]),textarea{font-size:16px!important;}", "input,select,textarea{min-width:0;}", "button::after,[role=button]::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:max(100%,44px);height:max(100%,44px);}", "input::placeholder,textarea::placeholder{color:var(--color-text-tertiary);font-weight:400;}", "html.light-mode input::placeholder,html.light-mode textarea::placeholder{color:rgba(79,101,138,0.6);}", "html.light-mode input,html[data-style-profile='light'] input{background-color:#EFEFF4!important;border-color:rgba(60,60,67,0.16)!important;color:#1C1C1E!important;}", "html.light-mode input[style*='background:'][style*='color:'],html[data-style-profile='light'] input[style*='background:'][style*='color:']{background-color:#EFEFF4!important;color:#1C1C1E!important;border-color:rgba(60,60,67,0.16)!important;}", "html.light-mode textarea,html[data-style-profile='light'] textarea{background-color:#EFEFF4!important;border-color:rgba(60,60,67,0.16)!important;color:#1C1C1E!important;}", "html.light-mode select,html[data-style-profile='light'] select{background-color:#EFEFF4!important;border-color:rgba(60,60,67,0.16)!important;color:#1C1C1E!important;}", "html.light-mode [style*='color:#fff'],html[data-style-profile='light'] [style*='color:#fff']{color:#1C1C1E!important;}", "html.light-mode [style*='background:#111'],html[data-style-profile='light'] [style*='background:#111']{background:#E4E6E9!important;}", "html.light-mode [style*='border:'],html[data-style-profile='light'] [style*='border:']{border-color:#C8CDD6!important;}", "html.light-mode [style*='rgba(8, 8, 9']{background-color:rgba(242,242,247,0.92)!important;}", "html.light-mode button[style*='borderRadius:13'][style*='padding:14px'],html[data-style-profile='light'] button[style*='borderRadius:13'][style*='padding:14px']{background-color:#F0F2F5!important;border-color:#C8CDD6!important;}", "nav{background:rgba(8,8,9,0.8);border-top:1px solid rgba(36,36,40,0.5);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);}", "[style*='box-shadow']:not([style*='none']){box-shadow:0 4px 14px var(--color-shadow)!important;}", "[style*='borderRadius:12'],[style*='borderRadius:10'],[style*='borderRadius:8']{background-color:inherit;border:1px solid rgba(36,36,40,0.8);}", "html.light-mode [style*='borderRadius:12'],html.light-mode [style*='borderRadius:10'],html.light-mode [style*='borderRadius:8']{border-color:#C8CDD6!important;}", "[style*='background:linear-gradient']{box-shadow:0 8px 24px rgba(249,115,22,0.15);}", "input[style*='background']{background-color:rgba(24,24,27,0.8)!important;border:1px solid rgba(36,36,40,0.8)!important;color:#F5F5F5!important;}", "html.light-mode input[style*='background'],html[data-style-profile='light'] input[style*='background']{background-color:#F0F2F5!important;border:1px solid #C8CDD6!important;color:#0F172A!important;}", "input[style*='background']:focus{background-color:rgba(24,24,27,0.95)!important;border-color:rgba(249,115,22,0.5)!important;}", "button[style*='color:#fff']{font-weight:600;letter-spacing:0px;box-shadow:0 4px 12px rgba(0,0,0,0.3);}", "button[style*='color:#fff']:hover{box-shadow:0 8px 24px rgba(249,115,22,0.25);}", "[style*='display:flex'][style*='gap:10'],[style*='display:flex'][style*='gap:12'],[style*='display:flex'][style*='gap:16']{align-items:center;}", "[style*='gridTemplateColumns:1fr 1fr'] button[style*='background:'][style*='borderRadius']{transition:all 0.2s ease;}", "[style*='gridTemplateColumns:1fr 1fr'] button[style*='background:']:active{transform:scale(0.96);}", "button[style*='width: 20px'],button[style*='width: 24px'],button[style*='width: 26px'],button[style*='width: 28px'],button[style*='width: 30px'],button[style*='width: 32px'],button[style*='width: 34px'],button[style*='width: 36px'],button[style*='width: 38px'],button[style*='width: 40px']{min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;}", "div[role='button'][style*='width: 20px'],div[role='button'][style*='width: 24px'],div[role='button'][style*='width: 28px'],div[role='button'][style*='width: 32px'],div[role='button'][style*='width: 36px'],div[role='button'][style*='width: 40px']{min-width:44px;min-height:44px;}", "@keyframes overlayIn{from{opacity:0}to{opacity:1}}", "@keyframes pillIn{from{opacity:0;transform:scale(0.85)}to{opacity:1;transform:scale(1)}}", "@keyframes cardRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}", "@keyframes dotSpring{0%{transform:scale(0)}60%{transform:scale(1.3)}100%{transform:scale(1)}}", "[style*='var(--glass-bar)']{backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 8px 24px var(--color-shadow-light);}", "nav button:hover{transform:none;box-shadow:none;}", "nav button:active{transform:scale(0.92);}", "nav button:focus:not(:focus-visible){box-shadow:none;}", "[style*='bottom: 80px'][style*='position: fixed']{bottom:calc(80px + env(safe-area-inset-bottom, 0px))!important;}", "[style*='padding-bottom: 80px']{padding-bottom:calc(80px + env(safe-area-inset-bottom, 0px))!important;}", "[style*='padding-bottom: 100px']{padding-bottom:calc(100px + env(safe-area-inset-bottom, 0px))!important;}", "[style*='padding-bottom: 150px']{padding-bottom:calc(150px + env(safe-area-inset-bottom, 0px))!important;}", "[style*='padding-bottom: 160px']{padding-bottom:calc(160px + env(safe-area-inset-bottom, 0px))!important;}", "[style*='linear-gradient(rgba(249, 115, 22, 0.094)'],[style*='linear-gradient(rgba(249, 115, 22, 0.125)'],[style*='linear-gradient(rgba(249, 115, 22, 0.18)']{background:none!important;}", "button[style*='background: transparent'][style*='var(--color-border)']{background:rgba(120,120,128,0.16)!important;border-color:transparent!important;}", "[style*='background: var(--color-card)'][style*='padding: 13px'],[style*='background: var(--color-card)'][style*='padding: 12px 14px'],[style*='background: var(--color-card)'][style*='padding: 13px 14px'],[style*='background: var(--color-card)'][style*='padding: 14px']{padding:16px!important;}", "[style*='background: var(--color-card)'][style*='padding: 15px']{padding:17px 16px!important;}", "[style*='background: var(--color-card)'][style*='border-radius: 12px'],[style*='background: var(--color-card)'][style*='border-radius: 13px'],[style*='background: var(--color-card)'][style*='border-radius: 14px'],[style*='background: var(--color-card)'][style*='border-radius: 16px']{border-radius:16px!important;box-shadow:0 1px 2px var(--color-shadow-light),0 6px 20px var(--color-shadow-light)!important;}", "[style*='1px solid var(--color-border)']{border-width:0.5px!important;}", "button[style*='border-radius: 9px'],button[style*='border-radius: 10px'],button[style*='border-radius: 11px']{border-radius:12px!important;}", "button[style*='border-radius: 12px'],button[style*='border-radius: 13px'],button[style*='border-radius: 14px']{border-radius:14px!important;}", "button[style*='linear-gradient']{border-radius:14px!important;box-shadow:0 2px 6px rgba(249,115,22,0.25),0 8px 22px rgba(249,115,22,0.22)!important;}", "input[style*='border-radius'],textarea[style*='border-radius'],select[style*='border-radius']{border-radius:12px!important;}", "[style*='padding: 52px 20px'] h1{font-size:32px!important;letter-spacing:-0.01em!important;}", "[style*='padding: 52px 20px']{padding-top:max(58px, calc(env(safe-area-inset-top, 0px) + 10px))!important;}", "p{line-height:1.45;}", "h1,h2{line-height:1.15;}", "p[style*='font-size: 11px'][style*='letter-spacing']{opacity:0.85;}", "[style*='border-radius: 22px 22px 0px 0px'],[style*='border-radius: 24px 24px 0px 0px']{border-radius:24px 24px 0 0!important;}", "html.theme-slate,html[data-style-profile='slate']{--glass-bar:rgba(13,17,23,0.85);--color-bg:#0D1117;--color-surface:#161B22;--color-card:#21262D;--color-border:rgba(48,54,61,0.9);--color-text:#E6EDF3;--color-text-muted:#A3ADB8;--color-text-subtle:#2D333B;--color-shadow:rgba(1,4,9,0.4);--color-shadow-light:rgba(1,4,9,0.15);}", "html.theme-slate body,html[data-style-profile='slate'] body{background:#0D1117!important;}", "html.theme-slate nav,html[data-style-profile='slate'] nav{background:rgba(13,17,23,0.85)!important;border-top:1px solid rgba(48,54,61,0.7)!important;}", "html.theme-slate [style*='rgba(8, 8, 9']{background-color:rgba(13,17,23,0.92)!important;}", "html.theme-slate input[style*='background'],html[data-style-profile='slate'] input[style*='background']{background-color:rgba(33,38,45,0.95)!important;border-color:rgba(48,54,61,0.9)!important;color:#E6EDF3!important;}", "html.theme-slate textarea,html[data-style-profile='slate'] textarea{background-color:rgba(33,38,45,0.95)!important;border-color:rgba(48,54,61,0.9)!important;color:#E6EDF3!important;}", "html.theme-slate select,html[data-style-profile='slate'] select{background-color:rgba(33,38,45,0.95)!important;border-color:rgba(48,54,61,0.9)!important;color:#E6EDF3!important;}", "html.theme-navy,html[data-style-profile='navy']{--glass-bar:rgba(7,15,30,0.88);--color-bg:#070F1E;--color-surface:#0C1829;--color-card:#112035;--color-border:rgba(56,139,253,0.12);--color-text:#E0EFFF;--color-text-muted:#6B91BE;--color-text-subtle:#142035;--color-shadow:rgba(0,4,15,0.5);--color-shadow-light:rgba(0,4,15,0.18);}", "html.theme-navy body,html[data-style-profile='navy'] body{background:#070F1E!important;}", "html.theme-navy nav,html[data-style-profile='navy'] nav{background:rgba(7,15,30,0.88)!important;border-top:1px solid rgba(56,139,253,0.12)!important;}", "html.theme-navy [style*='rgba(8, 8, 9']{background-color:rgba(7,15,30,0.92)!important;}", "html.theme-navy input[style*='background'],html[data-style-profile='navy'] input[style*='background']{background-color:rgba(17,32,53,0.95)!important;border-color:rgba(56,139,253,0.18)!important;color:#E0EFFF!important;}", "html.theme-navy textarea,html[data-style-profile='navy'] textarea{background-color:rgba(17,32,53,0.95)!important;border-color:rgba(56,139,253,0.18)!important;color:#E0EFFF!important;}", "html.theme-navy select,html[data-style-profile='navy'] select{background-color:rgba(17,32,53,0.95)!important;border-color:rgba(56,139,253,0.18)!important;color:#E0EFFF!important;}", "html.theme-midnight,html[data-style-profile='midnight']{--glass-bar:rgba(12,9,23,0.88);--color-bg:#0C0917;--color-surface:#14102A;--color-card:#1C183A;--color-border:rgba(139,92,246,0.14);--color-text:#EDE9FE;--color-text-muted:#A79BCC;--color-text-subtle:#201A3D;--color-shadow:rgba(0,0,0,0.45);--color-shadow-light:rgba(0,0,0,0.18);}", "html.theme-midnight body,html[data-style-profile='midnight'] body{background:#0C0917!important;}", "html.theme-midnight nav,html[data-style-profile='midnight'] nav{background:rgba(12,9,23,0.88)!important;border-top:1px solid rgba(139,92,246,0.14)!important;}", "html.theme-midnight [style*='rgba(8, 8, 9']{background-color:rgba(12,9,23,0.92)!important;}", "html.theme-midnight input[style*='background'],html[data-style-profile='midnight'] input[style*='background']{background-color:rgba(28,24,58,0.95)!important;border-color:rgba(139,92,246,0.18)!important;color:#EDE9FE!important;}", "html.theme-midnight textarea,html[data-style-profile='midnight'] textarea{background-color:rgba(28,24,58,0.95)!important;border-color:rgba(139,92,246,0.18)!important;color:#EDE9FE!important;}", "html.theme-midnight select,html[data-style-profile='midnight'] select{background-color:rgba(28,24,58,0.95)!important;border-color:rgba(139,92,246,0.18)!important;color:#EDE9FE!important;}"].join("");
+"}", "@keyframes glowPulse{0%,100%{box-shadow:0 0 20px rgba(249,115,22,0.4)}50%{box-shadow:0 0 40px rgba(249,115,22,0.8)}}", "@keyframes checkPulse{0%{transform:scale(1)}50%{transform:scale(1.3)}100%{transform:scale(1)}}", "@keyframes jiggle{0%,100%{transform:rotate(0deg)}25%{transform:rotate(-1.2deg)}75%{transform:rotate(1.2deg)}}", "@keyframes partialsFlash{0%{transform:scale(1)}40%{transform:scale(1.55);background:var(--color-accent);color:#fff;border-color:var(--color-accent)}100%{transform:scale(1)}}", "@keyframes spin{to{transform:rotate(360deg)}}", "@keyframes progressArc{from{stroke-dashoffset:565}to{stroke-dashoffset:0}}", "/* ── Design system v3 ────────────────────────────────────────────────    Apple-style composition layer: grouped surfaces, a real type scale and    a spacing rhythm. Colours above are unchanged so nothing regresses;    these are additive tokens the DS primitives consume. */ :root {   /* grouped-inset surfaces (iOS Settings / Health pattern) */   --ds-grouped: #000000;   --ds-elevated: #1C1C1E;   --ds-elevated-2: #2C2C2E;   --ds-separator: rgba(84,84,88,0.34);   --ds-fill: rgba(120,120,128,0.20);   --ds-fill-soft: rgba(120,120,128,0.12);   --ds-material: rgba(30,30,32,0.72);    /* type scale */   --ds-t-large: 34px;   /* large title */   --ds-t-title: 26px;   --ds-t-head: 20px;   --ds-t-body: 16px;   --ds-t-sub: 15px;   --ds-t-foot: 13px;   --ds-t-cap: 12px;   --ds-t-cap2: 11px;    /* spacing rhythm */   --ds-s1: 4px;  --ds-s2: 8px;  --ds-s3: 12px;   --ds-s4: 16px; --ds-s5: 20px; --ds-s6: 24px; --ds-s8: 32px;    /* radii */   --ds-r-sm: 10px; --ds-r-md: 14px; --ds-r-lg: 18px; --ds-r-xl: 22px; } html.light-mode {   --ds-grouped: #F2F2F7;   --ds-elevated: #FFFFFF;   --ds-elevated-2: #F2F2F7;   --ds-separator: rgba(60,60,67,0.20);   --ds-fill: rgba(120,120,128,0.16);   --ds-fill-soft: rgba(120,120,128,0.08);   --ds-material: rgba(255,255,255,0.78); }  /* Numerals line up in columns wherever they're compared */ .ds-num { font-variant-numeric: tabular-nums; }  /* Grouped list: rows separated by inset hairlines, not boxed individually */ .ds-list > * + * { border-top: 0.5px solid var(--ds-separator); }  /* Large title that settles as you scroll */ .ds-largetitle {   font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif;   font-size: var(--ds-t-large);   font-weight: 800;   letter-spacing: 0.02em;   line-height: 1.05;   color: var(--color-text);   margin: 0; } .ds-section-hd {   font-size: var(--ds-t-cap2);   font-weight: 600;   letter-spacing: 0.06em;   text-transform: uppercase;   color: var(--color-text-muted);   margin: 0 0 var(--ds-s2);   padding-left: var(--ds-s1); } @media (prefers-reduced-motion: reduce) {   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }   [style*=\"animation: spin\"], .lk-spin { animation: pulse 1.4s ease-in-out infinite !important; animation-duration: 1.4s !important; } } ", "html.theme-slate,html[data-style-profile='slate']{--ds-grouped:#0D1117;--ds-elevated:#21262D;--ds-elevated-2:#2D333B;--ds-sep:rgba(48,54,61,0.9);--ds-fill:rgba(139,148,158,0.16);--ds-fill-soft:rgba(139,148,158,0.09);--ds-material:rgba(13,17,23,0.72);}", "html.theme-navy,html[data-style-profile='navy']{--ds-grouped:#070F1E;--ds-elevated:#112035;--ds-elevated-2:#16294280;--ds-sep:rgba(56,139,253,0.14);--ds-fill:rgba(107,145,190,0.16);--ds-fill-soft:rgba(107,145,190,0.09);--ds-material:rgba(7,15,30,0.75);}", "html.theme-midnight,html[data-style-profile='midnight']{--ds-grouped:#0C0917;--ds-elevated:#1C183A;--ds-elevated-2:#241E47;--ds-sep:rgba(139,92,246,0.16);--ds-fill:rgba(167,155,204,0.16);--ds-fill-soft:rgba(167,155,204,0.09);--ds-material:rgba(12,9,23,0.75);}", "@media (prefers-reduced-motion:reduce){*{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}[style*='animation: spin'],.lk-spin{animation:pulse 1.4s ease-in-out infinite!important;animation-duration:1.4s!important;animation-iteration-count:infinite!important}[style*='shimmer']{animation:pulse 1.6s ease-in-out infinite!important;animation-duration:1.6s!important;animation-iteration-count:infinite!important}}", "[style*='color: var(--color-accent)']{color:var(--color-accent-text)!important;}", "[style*='color: rgb(249, 115, 22)']{color:var(--color-accent-text)!important;}", "button[style*='background: var(--color-accent)'][style*='color: rgb(255, 255, 255)'],button[style*='background: var(--color-accent)'][style*='color: #fff']{background:var(--color-accent-deep)!important;}", "@media (prefers-reduced-transparency:reduce){nav,[style*='backdrop-filter'],[style*='var(--glass-bar)'],[style*='rgba(8, 8, 9']{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:var(--color-surface)!important;}}", "button,a,[role=button]{transition:transform .15s ease-out,box-shadow .15s ease-out,background-color .2s ease,color .2s ease,border-color .2s ease,opacity .2s ease;}", "@media (hover:hover) and (pointer:fine){button:hover,a:hover,[role=button]:hover{transform:translateY(-1px);box-shadow:0 4px 14px var(--color-shadow);}}", "button:active,[role=button]:active{transform:scale(0.97);transition-duration:.08s;box-shadow:0 1px 4px var(--color-shadow);}", "button:focus-visible,a:focus-visible,[role=button]:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px;box-shadow:none;}", "html.light-mode button:focus-visible,html.light-mode a:focus-visible,html.light-mode [role=button]:focus-visible{outline-color:var(--color-accent-deep);}", "input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px;box-shadow:none;}", "html.light-mode input:focus-visible,html.light-mode textarea:focus-visible,html.light-mode select:focus-visible{outline-color:var(--color-accent-deep);}", "[style*='background']{transition:background-color 0.24s ease,box-shadow 0.24s ease;}", "p{line-height:1.6;}", "@media (hover:hover) and (pointer:fine){[style*='border-radius'][style*='cursor: pointer']:hover{box-shadow:0 4px 16px var(--color-shadow);}}", "h1,h2,h3,h4,h5,h6{font-weight:700;line-height:1.2;}", "[style*='border:1px']{transition:border-color 0.24s ease,background-color 0.24s ease;border-color:rgba(36,36,40,0.8);}", "html.light-mode [style*='border:1px'],html[data-style-profile='light'] [style*='border:1px']{border-color:rgba(60,60,67,0.12)!important;}", "button:disabled{opacity:0.4;cursor:not-allowed;transform:none;}", "button,[role=button]{position:relative;}", "input:not([type=checkbox]):not([type=radio]),select{min-height:44px;}", "input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]),textarea,select{font-size:16px!important;}", "input,select,textarea{min-width:0;}", "button::after,[role=button]::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:max(100%,44px);height:max(100%,44px);}", "input::placeholder,textarea::placeholder{color:var(--color-text-tertiary);font-weight:400;}", "html.light-mode input::placeholder,html.light-mode textarea::placeholder{color:#63636B;}", "html.light-mode input,html[data-style-profile='light'] input{background-color:#EFEFF4!important;border-color:rgba(60,60,67,0.16)!important;color:#1C1C1E!important;}", "html.light-mode input[style*='background:'][style*='color:'],html[data-style-profile='light'] input[style*='background:'][style*='color:']{background-color:#EFEFF4!important;color:#1C1C1E!important;border-color:rgba(60,60,67,0.16)!important;}", "html.light-mode textarea,html[data-style-profile='light'] textarea{background-color:#EFEFF4!important;border-color:rgba(60,60,67,0.16)!important;color:#1C1C1E!important;}", "html.light-mode select,html[data-style-profile='light'] select{background-color:#EFEFF4!important;border-color:rgba(60,60,67,0.16)!important;color:#1C1C1E!important;}", "html.light-mode [style*='border:'],html[data-style-profile='light'] [style*='border:']{border-color:#C8CDD6!important;}", "html.light-mode [style*='rgba(8, 8, 9']{background-color:rgba(242,242,247,0.92)!important;}", "nav{background:rgba(8,8,9,0.8);border-top:1px solid rgba(36,36,40,0.5);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);}", "[style*='box-shadow: 0 1px']:not([style*='none']){box-shadow:0 1px 2px var(--color-shadow-light), 0 6px 20px var(--color-shadow)!important;}", "input[style*='background']{background-color:rgba(24,24,27,0.8)!important;border:1px solid rgba(36,36,40,0.8)!important;color:#F5F5F5!important;}", "html.light-mode input[style*='background'],html[data-style-profile='light'] input[style*='background']{background-color:#F0F2F5!important;border:1px solid #C8CDD6!important;color:#0F172A!important;}", "input[style*='background']:focus{background-color:rgba(24,24,27,0.95)!important;border-color:rgba(249,115,22,0.5)!important;}", "button[style*='color:#fff']{font-weight:600;letter-spacing:0px;box-shadow:0 4px 12px rgba(0,0,0,0.3);}", "button[style*='color:#fff']:hover{box-shadow:0 8px 24px rgba(249,115,22,0.25);}", "button[style*='width: 20px'],button[style*='width: 24px'],button[style*='width: 26px'],button[style*='width: 28px'],button[style*='width: 30px'],button[style*='width: 32px'],button[style*='width: 34px'],button[style*='width: 36px'],button[style*='width: 38px'],button[style*='width: 40px']{min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;}", "div[role='button'][style*='width: 20px'],div[role='button'][style*='width: 24px'],div[role='button'][style*='width: 28px'],div[role='button'][style*='width: 32px'],div[role='button'][style*='width: 36px'],div[role='button'][style*='width: 40px']{min-width:44px;min-height:44px;}", "@keyframes overlayIn{from{opacity:0}to{opacity:1}}", "@keyframes pillIn{from{opacity:0;transform:scale(0.85)}to{opacity:1;transform:scale(1)}}", "@keyframes cardRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}", "@keyframes dotSpring{0%{transform:scale(0)}60%{transform:scale(1.3)}100%{transform:scale(1)}}", "[style*='var(--glass-bar)']{backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 8px 24px var(--color-shadow-light);}", "nav button:hover{transform:none;box-shadow:none;}", "nav button:active{transform:scale(0.92);}", "[style*='bottom: 80px'][style*='position: fixed']{bottom:calc(80px + env(safe-area-inset-bottom, 0px))!important;}", "[style*='padding-bottom: 80px']{padding-bottom:max(calc(80px + env(safe-area-inset-bottom, 0px)), calc(var(--lk-nav-h, 0px) + 16px))!important;}", "[style*='padding-bottom: 100px']{padding-bottom:max(calc(100px + env(safe-area-inset-bottom, 0px)), calc(var(--lk-nav-h, 0px) + 16px))!important;}", "[style*='padding-bottom: 150px']{padding-bottom:max(calc(150px + env(safe-area-inset-bottom, 0px)), calc(var(--lk-nav-h, 0px) + 16px))!important;}", "[style*='padding-bottom: 160px']{padding-bottom:max(calc(160px + env(safe-area-inset-bottom, 0px)), calc(var(--lk-nav-h, 0px) + 16px))!important;}", "[style*='linear-gradient(rgba(249, 115, 22, 0.094)'],[style*='linear-gradient(rgba(249, 115, 22, 0.125)'],[style*='linear-gradient(rgba(249, 115, 22, 0.18)']{background:none!important;}", "button[style*='background: transparent'][style*='var(--color-border)']{background:rgba(120,120,128,0.16)!important;border-color:transparent!important;}", "[style*='background: var(--color-card)'][style*='padding: 13px'],[style*='background: var(--color-card)'][style*='padding: 12px 14px'],[style*='background: var(--color-card)'][style*='padding: 13px 14px'],[style*='background: var(--color-card)'][style*='padding: 14px']{padding:16px!important;}", "[style*='background: var(--color-card)'][style*='padding: 15px']{padding:17px 16px!important;}", "[style*='background: var(--color-card)'][style*='border-radius: 12px'],[style*='background: var(--color-card)'][style*='border-radius: 13px'],[style*='background: var(--color-card)'][style*='border-radius: 14px'],[style*='background: var(--color-card)'][style*='border-radius: 16px']{border-radius:16px!important;box-shadow:0 1px 2px var(--color-shadow-light),0 6px 20px var(--color-shadow-light)!important;}", "[style*='1px solid var(--color-border)']{border-width:0.5px!important;}", "button[style*='border-radius: 9px'],button[style*='border-radius: 10px'],button[style*='border-radius: 11px']{border-radius:12px!important;}", "button[style*='border-radius: 12px'],button[style*='border-radius: 13px'],button[style*='border-radius: 14px']{border-radius:14px!important;}", "button[style*='linear-gradient']{border-radius:14px!important;box-shadow:0 2px 6px rgba(249,115,22,0.25),0 8px 22px rgba(249,115,22,0.22)!important;}", "input[style*='border-radius'],textarea[style*='border-radius'],select[style*='border-radius']{border-radius:12px!important;}", "[style*='padding: 52px 20px'] h1{font-size:32px!important;letter-spacing:-0.01em!important;}", "[style*='padding: 52px 20px']{padding-top:max(58px, calc(env(safe-area-inset-top, 0px) + 10px))!important;}", "p{line-height:1.45;}", "@media (prefers-contrast: more){:root{--color-border:rgba(255,255,255,0.35);--color-text-muted:#D4D4D8;}html.light-mode{--color-border:rgba(60,60,67,0.60);--color-text-muted:#3C3C43;}[style*='1px solid var(--color-border)']{border-width:1px!important;}}", "p,li,.lk-selectable{-webkit-user-select:text;user-select:text;}", "h1,h2{line-height:1.15;}", "p[style*='font-size: 11px'][style*='letter-spacing']{opacity:0.85;}", "[style*='border-radius: 22px 22px 0px 0px'],[style*='border-radius: 24px 24px 0px 0px']{border-radius:24px 24px 0 0!important;}", "html.theme-slate,html[data-style-profile='slate']{--glass-bar:rgba(13,17,23,0.85);--color-bg:#0D1117;--color-surface:#161B22;--color-card:#21262D;--color-border:rgba(48,54,61,0.9);--color-text:#E6EDF3;--color-text-muted:#A3ADB8;--color-text-subtle:#2D333B;--color-shadow:rgba(1,4,9,0.4);--color-shadow-light:rgba(1,4,9,0.15);}", "html.theme-slate body,html[data-style-profile='slate'] body{background:#0D1117!important;}", "html.theme-slate nav,html[data-style-profile='slate'] nav{background:rgba(13,17,23,0.85)!important;border-top:1px solid rgba(48,54,61,0.7)!important;}", "html.theme-slate [style*='rgba(8, 8, 9']{background-color:rgba(13,17,23,0.92)!important;}", "html.theme-slate input[style*='background'],html[data-style-profile='slate'] input[style*='background']{background-color:rgba(33,38,45,0.95)!important;border-color:rgba(48,54,61,0.9)!important;color:#E6EDF3!important;}", "html.theme-slate textarea,html[data-style-profile='slate'] textarea{background-color:rgba(33,38,45,0.95)!important;border-color:rgba(48,54,61,0.9)!important;color:#E6EDF3!important;}", "html.theme-slate select,html[data-style-profile='slate'] select{background-color:rgba(33,38,45,0.95)!important;border-color:rgba(48,54,61,0.9)!important;color:#E6EDF3!important;}", "html.theme-navy,html[data-style-profile='navy']{--glass-bar:rgba(7,15,30,0.88);--color-bg:#070F1E;--color-surface:#0C1829;--color-card:#112035;--color-border:rgba(56,139,253,0.12);--color-text:#E0EFFF;--color-text-muted:#6B91BE;--color-text-subtle:#142035;--color-shadow:rgba(0,4,15,0.5);--color-shadow-light:rgba(0,4,15,0.18);}", "html.theme-navy body,html[data-style-profile='navy'] body{background:#070F1E!important;}", "html.theme-navy nav,html[data-style-profile='navy'] nav{background:rgba(7,15,30,0.88)!important;border-top:1px solid rgba(56,139,253,0.12)!important;}", "html.theme-navy [style*='rgba(8, 8, 9']{background-color:rgba(7,15,30,0.92)!important;}", "html.theme-navy input[style*='background'],html[data-style-profile='navy'] input[style*='background']{background-color:rgba(17,32,53,0.95)!important;border-color:rgba(56,139,253,0.18)!important;color:#E0EFFF!important;}", "html.theme-navy textarea,html[data-style-profile='navy'] textarea{background-color:rgba(17,32,53,0.95)!important;border-color:rgba(56,139,253,0.18)!important;color:#E0EFFF!important;}", "html.theme-navy select,html[data-style-profile='navy'] select{background-color:rgba(17,32,53,0.95)!important;border-color:rgba(56,139,253,0.18)!important;color:#E0EFFF!important;}", "html.theme-midnight,html[data-style-profile='midnight']{--glass-bar:rgba(12,9,23,0.88);--color-bg:#0C0917;--color-surface:#14102A;--color-card:#1C183A;--color-border:rgba(139,92,246,0.14);--color-text:#EDE9FE;--color-text-muted:#A79BCC;--color-text-subtle:#201A3D;--color-shadow:rgba(0,0,0,0.45);--color-shadow-light:rgba(0,0,0,0.18);}", "html.theme-midnight body,html[data-style-profile='midnight'] body{background:#0C0917!important;}", "html.theme-midnight nav,html[data-style-profile='midnight'] nav{background:rgba(12,9,23,0.88)!important;border-top:1px solid rgba(139,92,246,0.14)!important;}", "html.theme-midnight [style*='rgba(8, 8, 9']{background-color:rgba(12,9,23,0.92)!important;}", "html.theme-midnight input[style*='background'],html[data-style-profile='midnight'] input[style*='background']{background-color:rgba(28,24,58,0.95)!important;border-color:rgba(139,92,246,0.18)!important;color:#EDE9FE!important;}", "html.theme-midnight textarea,html[data-style-profile='midnight'] textarea{background-color:rgba(28,24,58,0.95)!important;border-color:rgba(139,92,246,0.18)!important;color:#EDE9FE!important;}", "html.theme-midnight select,html[data-style-profile='midnight'] select{background-color:rgba(28,24,58,0.95)!important;border-color:rgba(139,92,246,0.18)!important;color:#EDE9FE!important;}"].join("");
 (function migrateWeightsToKg() {
   try {
     if (ld("weightsKgMigrated", false)) return;
@@ -2156,10 +2274,48 @@ function ld(k, fb) {
     return fb;
   }
 }
+/* Every persisted value in the app goes through here, so an empty catch means
+   that once the quota is gone *nothing* saves — workouts, meals, settings —
+   while the UI carries on as if it had. The catch has to stay (private
+   browsing throws on setItem), but the failure has to be visible. */
+var _lkQuotaWarned = false;
+function lkIsQuotaError(e) {
+  return !!e && (e.name === "QuotaExceededError" ||
+    e.name === "NS_ERROR_DOM_QUOTA_REACHED" || e.code === 22 || e.code === 1014);
+}
 function sd(k, v) {
   try {
     if (storageAvailable) localStorage.setItem("lk_" + k, JSON.stringify(v));
+    return true;
+  } catch (e) {
+    if (lkIsQuotaError(e)) {
+      if (!_lkQuotaWarned) {
+        _lkQuotaWarned = true;
+        try {
+          window.LOCKED && window.LOCKED.toast &&
+            window.LOCKED.toast("Storage is full - changes are not being saved. Free space by deleting progress photos.", "error");
+        } catch (_) {}
+      }
+      try { window.dispatchEvent(new CustomEvent("lockedStorageFull", { detail: { key: k } })); } catch (_) {}
+    }
+    return false;
+  }
+}
+/* Roughly how much of the origin's localStorage budget this app is using, and
+   what progress photos account for. Used by Settings to make the ceiling
+   visible before it is hit. */
+function lkStorageUsage() {
+  var total = 0, photos = 0;
+  try {
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (key === null) continue;
+      var bytes = (key.length + (localStorage.getItem(key) || "").length) * 2;
+      total += bytes;
+      if (key === "lk_progressPhotos") photos = bytes;
+    }
   } catch (e) {}
+  return { totalBytes: total, photoBytes: photos, budgetBytes: 5 * 1024 * 1024 };
 }
 var THEMES = [{
   id: "dark",
@@ -2535,18 +2691,25 @@ function syncBetaData(onDone, onFail) {
 })();
 function saveProgressPhoto(base64, note) {
   var photos = ld("progressPhotos", []);
-  var thumb = base64;
-  photos.push({
+  var next = photos.concat([{
     date: new Date().toISOString(),
     note: note || "",
-    thumb: thumb
-  });
-  sd("progressPhotos", photos);
+    thumb: base64
+  }]);
+  /* Photos are the only unbounded blob in a 5 MB budget shared with every
+     other key, so the write is checked rather than assumed. On failure the
+     previous list is left intact and the caller is told, instead of the photo
+     silently vanishing on the next reload and taking the rest of the app's
+     persistence down with it. */
+  if (!sd("progressPhotos", next)) {
+    sd("progressPhotos", photos);
+    return null;
+  }
   logBetaActivity("progress_photo", {
     date: new Date().toISOString(),
     note: note
   });
-  return photos;
+  return next;
 }
 function resizeImage(file, maxW, cb) {
   var reader = new FileReader();
@@ -2555,9 +2718,17 @@ function resizeImage(file, maxW, cb) {
     img.onload = function () {
       var w = img.width;
       var h = img.height;
+      /* Constrain both axes. Capping width alone lets a tall photo through at
+         many times the intended pixel count, and these are base64 strings in a
+         5 MB budget shared with every other key. */
+      var maxH = Math.round(maxW * 1.6);
       if (w > maxW) {
         h = Math.round(h * (maxW / w));
         w = maxW;
+      }
+      if (h > maxH) {
+        w = Math.round(w * (maxH / h));
+        h = maxH;
       }
       var canvas = document.createElement("canvas");
       canvas.width = w;
@@ -4327,6 +4498,70 @@ function computeMuscleRecovery(history, now) {
   });
   return rows;
 }
+/* Enter and Space must activate anything that behaves like a button. These
+   call sites wrap block-level children, so they cannot be a real <button>;
+   role=button + tabIndex + this handler is the compliant equivalent. */
+/* Dialog focus management. A callback ref rather than a mount effect, because
+   several dialogs are rendered conditionally inside a larger component, where
+   an effect would fire when that component mounts instead of when the dialog
+   opens. The stack keeps nesting correct. */
+/* Locking the body with overflow:hidden does nothing for touch scrolling on
+   iOS. The reliable pattern is position:fixed with the scroll offset held in
+   `top`, restored on unlock. Reference-counted so nested overlays cannot
+   unlock each other. */
+var _lkScrollLocks = 0, _lkScrollY = 0;
+function lkLockScroll() {
+  if (_lkScrollLocks++ > 0) return;
+  _lkScrollY = window.scrollY || window.pageYOffset || 0;
+  var b = document.body.style;
+  b.position = "fixed";
+  b.top = -_lkScrollY + "px";
+  b.left = "0";
+  b.right = "0";
+  b.width = "100%";
+  /* position:fixed is what actually holds on iOS; overflow:hidden covers the
+     desktop engines and keeps the intent legible. */
+  b.overflow = "hidden";
+}
+function lkUnlockScroll() {
+  if (_lkScrollLocks === 0 || --_lkScrollLocks > 0) return;
+  var b = document.body.style;
+  b.position = ""; b.top = ""; b.left = ""; b.right = ""; b.width = "";
+  b.overflow = "";
+  window.scrollTo(0, _lkScrollY);
+}
+
+var _lkDialogStack = [];
+function lkTrapTab(e) {
+  if (e.key !== "Tab") return;
+  var f = e.currentTarget.querySelectorAll(
+    'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),' +
+    'textarea:not([disabled]),[tabindex]:not([tabindex="-1"])');
+  var list = [];
+  for (var i = 0; i < f.length; i++) if (f[i].offsetParent !== null) list.push(f[i]);
+  if (!list.length) return;
+  var first = list[0], last = list[list.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+function lkDialogRef(node) {
+  if (node) {
+    _lkDialogStack.push(document.activeElement);
+    node.addEventListener("keydown", lkTrapTab);
+    if (node.focus) node.focus();
+  } else {
+    var prev = _lkDialogStack.pop();
+    if (prev && prev.focus && document.contains(prev)) prev.focus();
+  }
+}
+
+function lkKeyActivate(e) {
+  if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+    e.preventDefault();
+    e.currentTarget.click();
+  }
+}
+
 function Ic(p) {
   return React.createElement("svg", {
     width: p.z || 20,
@@ -6303,7 +6538,7 @@ function ExerciseDetailModal(p) {
       justifyContent: "flex-end"
     }
   }, React.createElement("div", {
-    onClick: p.onClose,
+    onClick: function () { edSheet.close(); },
     style: {
       position: "absolute",
       top: 0,
@@ -6325,7 +6560,7 @@ function ExerciseDetailModal(p) {
       maxWidth: 420,
       width: "100%",
       margin: "0 auto",
-      paddingBottom: 20
+      paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)"
     }
   }, React.createElement("div", _extends({}, edSheet.zone, {
     style: {
@@ -6356,7 +6591,7 @@ function ExerciseDetailModal(p) {
       margin: 0
     }
   }, ex.name), React.createElement("button", {
-    onClick: p.onClose,
+    onClick: function () { edSheet.close(); },
     style: {
       background: "none",
       border: "none",
@@ -6383,7 +6618,12 @@ function ExerciseDetailModal(p) {
     style: {
       width: "100%",
       display: "block",
-      borderRadius: 14
+      borderRadius: 14,
+      /* ExerciseDB media is square. Reserving the box stops the sheet
+         jumping under the finger when the GIF arrives mid-scroll. */
+      aspectRatio: "1",
+      objectFit: "cover",
+      background: "var(--color-fill1)"
     }
   })) : React.createElement("div", {
     style: {
@@ -6493,7 +6733,7 @@ function ExerciseDetailModal(p) {
       cursor: "pointer"
     }
   }, "ADD TO WORKOUT"), React.createElement("button", {
-    onClick: p.onClose,
+    onClick: function () { edSheet.close(); },
     style: {
       flex: 1,
       padding: "12px",
@@ -6554,11 +6794,10 @@ function ExerciseActionSheet(p) {
   useEffect(function () {
     function onKey(e) { if (e.key === "Escape") dismiss(); }
     document.addEventListener("keydown", onKey);
-    var prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    lkLockScroll();
     return function () {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
+      lkUnlockScroll();
       if (closeTimer.current) clearTimeout(closeTimer.current);
     };
   }, []);
@@ -6569,6 +6808,9 @@ function ExerciseActionSheet(p) {
     : 50;
 
   return React.createElement("div", {
+    ref: lkDialogRef,
+    tabIndex: -1,
+    "aria-modal": "true",
     role: "dialog",
     "aria-label": "Exercise actions",
     className: "lk-veil" + (closing ? " lk-out" : ""),
@@ -6646,9 +6888,7 @@ function ExerciseActionSheet(p) {
         borderRadius: 999,
         border: "1px solid " + (it.destructive ? RE_H + "35" : BORD),
         background: it.destructive ? RE_H + "12" : "var(--ds-material, rgba(30,30,32,0.86))",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
-        color: col,
+                color: col,
         fontSize: "0.9375rem",
         fontWeight: 600,
         cursor: "pointer",
@@ -6661,6 +6901,26 @@ function ExerciseActionSheet(p) {
   }))));
 }
 var Nav = React.memo(function (p) {
+  /* The clearance content must leave for the tab bar cannot be a constant:
+     the bar is sized by its labels, which grow with page zoom and Dynamic
+     Type, while the reserved padding does not. Publish the measured height
+     so layout can consume it. */
+  var navRef = useRef(null);
+  useEffect(function () {
+    var el = navRef.current;
+    if (!el) return;
+    function sync() {
+      document.documentElement.style.setProperty("--lk-nav-h", el.offsetHeight + "px");
+    }
+    sync();
+    var ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(sync) : null;
+    if (ro) ro.observe(el);
+    window.addEventListener("resize", sync);
+    return function () {
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", sync);
+    };
+  }, []);
   var tabs = [{
     id: "home",
     label: "Home",
@@ -6683,6 +6943,7 @@ var Nav = React.memo(function (p) {
     d: D.profile
   }];
   return React.createElement("nav", {
+    ref: navRef,
     style: {
       position: "fixed",
       bottom: 0,
@@ -6867,8 +7128,11 @@ function ExLib(p) {
     }, React.createElement("div", {
       style: {
         padding: "52px 20px 16px",
-        background: SURF
-      }
+        background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
+    }
     }, React.createElement("div", {
       style: {
         display: "flex",
@@ -6877,6 +7141,7 @@ function ExLib(p) {
         marginBottom: 4
       }
     }, React.createElement("button", {
+    "aria-label": "Back",
       onClick: function () {
         setShowCreate(false);
         setCName("");
@@ -7082,7 +7347,7 @@ function ExLib(p) {
       }
     }, "kg / lb")), cStartResist && parseFloat(cStartResist) > 0 && React.createElement("p", {
       style: {
-        fontSize: "0.6875rem",
+        fontSize: "0.8125rem",
         color: OR,
         marginTop: 8
       }
@@ -7187,8 +7452,11 @@ function ExLib(p) {
     }, React.createElement("div", {
       style: {
         padding: "52px 20px 16px",
-        background: SURF
-      }
+        background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
+    }
     }, React.createElement("div", {
       style: {
         display: "flex",
@@ -7197,6 +7465,7 @@ function ExLib(p) {
         marginBottom: 12
       }
     }, React.createElement("button", {
+    "aria-label": "Back",
       onClick: function () {
         setQ("");
       },
@@ -7288,8 +7557,12 @@ function ExLib(p) {
     }, React.createElement("div", {
       style: {
         padding: "52px 20px 16px",
-        background: "linear-gradient(180deg," + ag.col + "18 0%,transparent 100%)"
-      }
+        background: "linear-gradient(180deg," + ag.col + "18 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
+    }
     }, React.createElement("button", {
       onClick: function () {
         setSub(null);
@@ -7356,8 +7629,12 @@ function ExLib(p) {
     }, React.createElement("div", {
       style: {
         padding: "52px 20px 16px",
-        background: "linear-gradient(180deg," + ag.col + "20 0%,transparent 100%)"
-      }
+        background: "linear-gradient(180deg," + ag.col + "20 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
+    }
     }, React.createElement("button", {
       onClick: function () {
         setGrp(null);
@@ -7412,7 +7689,7 @@ function ExLib(p) {
       }, React.createElement("div", {
         style: {
           width: 40,
-          height: 40,
+          minHeight: 40,
           borderRadius: 11,
           background: ag.col + "18",
           display: "flex",
@@ -7457,7 +7734,10 @@ function ExLib(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -7467,6 +7747,7 @@ function ExLib(p) {
       marginBottom: 16
     }
   }, p.onBack && React.createElement("button", {
+    "aria-label": "Back",
     onClick: p.onBack,
     style: {
       background: "none",
@@ -7613,7 +7894,10 @@ function ReplacePanel(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -7623,6 +7907,7 @@ function ReplacePanel(p) {
       marginBottom: 12
     }
   }, React.createElement("button", {
+    "aria-label": "Back",
     onClick: p.onClose,
     style: {
       background: "none",
@@ -8205,7 +8490,10 @@ function SplitBuilder(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 20px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -8215,6 +8503,7 @@ function SplitBuilder(p) {
       marginBottom: 16
     }
   }, React.createElement("button", {
+    "aria-label": "Back",
     onClick: p.onBack,
     style: {
       background: "none",
@@ -8272,7 +8561,7 @@ function SplitBuilder(p) {
     }, React.createElement("div", {
       style: {
         width: 28,
-        height: 28,
+        minHeight: 28,
         borderRadius: 7,
         background: OR_H + "22",
         display: "flex",
@@ -8330,6 +8619,9 @@ function SplitBuilder(p) {
         outline: "none"
       }
     }) : React.createElement("p", {
+      role: "button",
+      tabIndex: 0,
+      onKeyDown: lkKeyActivate,
       onClick: function () {
         setRenamingDay(di);
         setRenameVal(day.name);
@@ -8342,6 +8634,7 @@ function SplitBuilder(p) {
         cursor: "text"
       }
     }, day.name), React.createElement("button", {
+    "aria-label": "Rename day",
       onClick: function () {
         setRenamingDay(di);
         setRenameVal(day.name);
@@ -8364,6 +8657,7 @@ function SplitBuilder(p) {
       z: 11,
       c: MU
     })), React.createElement("button", {
+    "aria-label": "Close",
       onClick: function () {
         removeDay(di);
       },
@@ -8486,6 +8780,7 @@ function SplitBuilder(p) {
             margin: 0
           }
         }, ex.muscle)), React.createElement("button", {
+    "aria-label": "Close",
           onClick: function () {
             removeItem(di, ii);
           },
@@ -8644,6 +8939,7 @@ function SplitBuilder(p) {
           padding: "2px 0"
         }
       })), React.createElement("button", {
+    "aria-label": "Close",
         onClick: function () {
           removeItem(di, ii);
         },
@@ -8832,6 +9128,9 @@ function NumPad(p) {
   }
   var keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "del"];
   return React.createElement("div", {
+    ref: lkDialogRef,
+    tabIndex: -1,
+    "aria-modal": "true",
     role: "dialog",
     "aria-label": p.label + " entry",
     style: {
@@ -8844,7 +9143,7 @@ function NumPad(p) {
       background: SURF,
       borderTop: "1px solid " + BORD,
       zIndex: 300,
-      paddingBottom: 20
+      paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)"
     }
   }, React.createElement("div", {
     style: {
@@ -10425,7 +10724,7 @@ function WorkoutLog(p) {
     },
     style: {
       width: 28,
-      height: 28,
+      minHeight: 28,
       borderRadius: 8,
       border: "1px solid " + BORD,
       background: "transparent",
@@ -10528,6 +10827,9 @@ function WorkoutLog(p) {
       color: "rgba(255,255,255,.8)"
     }
   }, prMsg))), idlePrompt && React.createElement("div", {
+    ref: lkDialogRef,
+    tabIndex: -1,
+    "aria-modal": "true",
     role: "dialog",
     "aria-label": "Still training?",
     style: {
@@ -10879,6 +11181,7 @@ function WorkoutLog(p) {
       position: "relative"
     }
   }, React.createElement("button", {
+    "aria-label": "Workout tools",
     onClick: function () {
       setShowTools(function (v) {
         return !v;
@@ -10989,7 +11292,7 @@ function WorkoutLog(p) {
   }, React.createElement("span", {
     style: {
       width: 16,
-      height: 16,
+      minHeight: 16,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -11160,6 +11463,7 @@ function WorkoutLog(p) {
           padding: "0 4px"
         }
       }, row.expanded ? "−" : "+"), React.createElement("button", {
+    "aria-label": "Close",
         onClick: function () {
           removeRow(ri);
         },
@@ -11364,6 +11668,7 @@ function WorkoutLog(p) {
           border: "1px solid " + BORD
         }
       }, "SS"), React.createElement("button", {
+    "aria-label": "Close",
         onClick: function () {
           toggleSuperset(ri);
         },
@@ -11906,7 +12211,7 @@ function WorkoutLog(p) {
       }
     }, "SS")), !holdTipSeen && ri === 0 && React.createElement("span", {
       style: {
-        fontSize: "0.625rem",
+        fontSize: "0.6875rem",
         fontWeight: 700,
         color: MU,
         border: "1px solid " + BORD,
@@ -12395,6 +12700,7 @@ function WorkoutLog(p) {
             lineHeight: 1
           }
         }, set.partials, "x"), React.createElement("button", {
+    "aria-label": "Add a partial rep",
           onClick: function () {
             var cur = parseInt(set.partials) || 0;
             setVal(ri, si, "partials", String(cur + 1));
@@ -12417,6 +12723,7 @@ function WorkoutLog(p) {
             animation: partialsFlash === ri + "," + si ? "partialsFlash 0.32s ease-out" : "none"
           }
         }, "+"), (parseInt(set.partials) || 0) > 0 && React.createElement("button", {
+    "aria-label": "Clear partials",
           onClick: function () {
             setVal(ri, si, "partials", "");
           },
@@ -12680,6 +12987,7 @@ function WorkoutLog(p) {
       flex: 1
     }
   }, "ADD BLOCK"), React.createElement("button", {
+    "aria-label": "Close",
     onClick: function () {
       setBlockModal(null);
     },
@@ -12696,7 +13004,7 @@ function WorkoutLog(p) {
     c: MU
   }))), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginBottom: 8,
       lineHeight: 1.4
@@ -13101,7 +13409,10 @@ function AISplitBuilder(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 24px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -13111,6 +13422,7 @@ function AISplitBuilder(p) {
       marginBottom: 4
     }
   }, React.createElement("button", {
+    "aria-label": "Back",
     onClick: p.onBack,
     style: {
       background: "none",
@@ -13141,6 +13453,9 @@ function AISplitBuilder(p) {
       gap: 16
     }
   }, React.createElement("div", {
+    role: "button",
+    tabIndex: 0,
+    onKeyDown: lkKeyActivate,
     onClick: startChat,
     style: {
       background: CARD,
@@ -13178,6 +13493,9 @@ function AISplitBuilder(p) {
       lineHeight: 1.5
     }
   }, "Tell the AI your goals, days available, preferred style, injuries - it builds a fully customized split.")), React.createElement("div", {
+    role: "button",
+    tabIndex: 0,
+    onKeyDown: lkKeyActivate,
     onClick: function () {
       setMode("photo");
     },
@@ -13224,7 +13542,10 @@ function AISplitBuilder(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -13234,6 +13555,7 @@ function AISplitBuilder(p) {
       marginBottom: 4
     }
   }, React.createElement("button", {
+    "aria-label": "Back",
     onClick: function () {
       setMode("pick");
       setImgData(null);
@@ -13279,6 +13601,7 @@ function AISplitBuilder(p) {
       display: "block"
     }
   }), React.createElement("button", {
+    "aria-label": "Close",
     onClick: function () {
       setImgData(null);
       setPhotoResult(null);
@@ -13375,7 +13698,7 @@ function AISplitBuilder(p) {
     }
   }), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 4
     }
@@ -13480,7 +13803,10 @@ function AISplitBuilder(p) {
       background: SURF,
       borderBottom: "1px solid " + BORD,
       padding: "52px 20px 16px",
-      flexShrink: 0
+      flexShrink: 0,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -13489,6 +13815,7 @@ function AISplitBuilder(p) {
       gap: 12
     }
   }, React.createElement("button", {
+    "aria-label": "Back",
     onClick: function () {
       setMode("pick");
       setMsgs([]);
@@ -13728,6 +14055,7 @@ function AISplitBuilder(p) {
       WebkitAppearance: "none"
     }
   }), React.createElement("button", {
+    "aria-label": "Send answer",
     onClick: send,
     disabled: !input.trim() || aiLoading,
     style: {
@@ -13892,10 +14220,12 @@ function TrainHub(p) {
       return next;
     });
   }
-  var [tab, setTab] = useState("splits");
-  var [view, setView] = useState("main");
+  var [tab, setTab] = useHubState("trainTab", "splits", ["splits", "history", "library"]);
+  var [view, setView] = useHubState("trainView", "main");
+  useTabReset("train", function () { setView("main"); setTab("splits"); });
   var [editSplit, setEditSplit] = useState(null);
   var [dayModal, setDayModal] = useState(null);
+  var daySheet = useSheetDrag(function () { setDayModal(null); });
   var [selectedWorkout, setSelectedWorkout] = useState(null);
   if (view === "create" || view === "edit") {
     return React.createElement(SplitBuilder, {
@@ -14001,9 +14331,10 @@ function TrainHub(p) {
       animation: "overlayIn .3s ease"
     },
     onClick: function () {
-      setDayModal(null);
+      daySheet.close();
     }
   }), React.createElement("div", {
+    ref: daySheet.ref,
     style: {
       position: "relative",
       background: SURF,
@@ -14015,15 +14346,16 @@ function TrainHub(p) {
       animation: "slideUp .5s cubic-bezier(0.32,0.72,0,1)",
       maxWidth: 420,
       width: "100%",
-      margin: "0 auto"
+      margin: "0 auto",
+      paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)"
     }
-  }, React.createElement("div", {
-    style: {
+  }, React.createElement("div", _extends({}, daySheet.zone, {
+    style: Object.assign({
       display: "flex",
       justifyContent: "center",
       padding: "8px 0 2px"
-    }
-  }, React.createElement("div", {
+    }, daySheet.zone.style)
+  }), React.createElement("div", {
     style: {
       width: 34,
       height: 4,
@@ -14048,6 +14380,7 @@ function TrainHub(p) {
       color: MU
     }
   }, "Choose a day to start")), React.createElement("button", {
+    "aria-label": "Close",
     onClick: function () {
       setDayModal(null);
     },
@@ -14067,6 +14400,9 @@ function TrainHub(p) {
     }
   }, dayModal.days.map(function (day, di) {
     return React.createElement("div", {
+      role: "button",
+      tabIndex: 0,
+      onKeyDown: lkKeyActivate,
       key: di,
       onClick: function () {
         setDayModal(null);
@@ -14090,7 +14426,7 @@ function TrainHub(p) {
     }, React.createElement("div", {
       style: {
         width: 34,
-        height: 34,
+        minHeight: 34,
         borderRadius: 9,
         background: OR_H + "22",
         display: "flex",
@@ -14123,6 +14459,9 @@ function TrainHub(p) {
       c: OR
     }));
   }), React.createElement("div", {
+    role: "button",
+    tabIndex: 0,
+    onKeyDown: lkKeyActivate,
     onClick: function () {
       setDayModal(null);
       p.onStart({
@@ -14164,7 +14503,10 @@ function TrainHub(p) {
   }, "Empty workout"))))), React.createElement("div", {
     style: {
       padding: "52px 20px 0",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -14732,8 +15074,24 @@ function TrainHub(p) {
     style: {
       fontSize: "0.875rem"
     }
-  }, "No workouts logged yet")) : p.history.map(function (w, i) {
+  }, "No workouts logged yet"), React.createElement("button", {
+    onClick: function () { setTab("splits"); },
+    style: {
+      marginTop: 14,
+      padding: "12px 20px",
+      borderRadius: 12,
+      border: "none",
+      background: ORD2,
+      color: "#fff",
+      fontSize: "0.8125rem",
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "Start a workout")) : p.history.map(function (w, i) {
     return React.createElement("div", {
+      role: "button",
+      tabIndex: 0,
+      onKeyDown: lkKeyActivate,
       key: i,
       onClick: function () {
         setSelectedWorkout(w);
@@ -14963,7 +15321,11 @@ function Review(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 24px",
-      background: "linear-gradient(180deg," + GR_H + "18 0%,transparent 100%)"
+      background: "linear-gradient(180deg," + GR_H + "18 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
     }
   }, React.createElement("span", {
     style: {
@@ -15174,7 +15536,10 @@ function Review(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("p", {
     style: {
@@ -15281,7 +15646,11 @@ function Review(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: "linear-gradient(180deg," + OR_H + "20 0%,transparent 100%)"
+      background: "linear-gradient(180deg," + OR_H + "20 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
     }
   }, React.createElement("p", {
     style: {
@@ -15482,7 +15851,7 @@ function ConvertToSplitModal(p) {
         background: CARD,
         borderRadius: "20px 20px 0 0",
         padding: "20px",
-        paddingBottom: 32
+        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 32px)"
       }
     }, React.createElement("div", {
       style: {
@@ -16001,6 +16370,7 @@ function WorkoutDetail(p) {
         gap: 12
       }
     }, React.createElement("button", {
+    "aria-label": "Back",
       onClick: function () {
         setEditing(false);
       },
@@ -16116,6 +16486,7 @@ function WorkoutDetail(p) {
           color: TX
         }
       }, ex.name), React.createElement("button", {
+    "aria-label": "Delete workout",
         onClick: function () {
           removeExercise(ei);
         },
@@ -16232,6 +16603,7 @@ function WorkoutDetail(p) {
             value: v
           }, v);
         })), React.createElement("button", {
+    "aria-label": "Close",
           onClick: function () {
             removeExSet(ei, si);
           },
@@ -16304,6 +16676,7 @@ function WorkoutDetail(p) {
       gap: 12
     }
   }, React.createElement("button", {
+    "aria-label": "Back",
     onClick: p.onBack,
     style: {
       background: "none",
@@ -16725,7 +17098,7 @@ function ProactiveTipCard(p) {
     }
   }, React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       fontWeight: 700,
       color: OR,
       margin: 0
@@ -16900,6 +17273,12 @@ function DynamicFeed(p) {
           fontSize: "1.125rem"
         }
       }, "\uD83D\uDCCB")), React.createElement("div", {
+        /* The control is the label block, not the whole card: a card-sized
+           button reads its entire contents as one name and, at large text
+           sizes, is tall enough to straddle the tab bar. */
+        role: "button",
+        tabIndex: 0,
+        onKeyDown: lkKeyActivate,
         style: {
           flex: 1
         }
@@ -17104,6 +17483,12 @@ function DynamicFeed(p) {
         z: 16,
         c: OR
       })), React.createElement("div", {
+        /* The control is the label block, not the whole card: a card-sized
+           button reads its entire contents as one name and, at large text
+           sizes, is tall enough to straddle the tab bar. */
+        role: "button",
+        tabIndex: 0,
+        onKeyDown: lkKeyActivate,
         style: {
           flex: 1
         }
@@ -17159,6 +17544,12 @@ function DynamicFeed(p) {
         z: 16,
         c: GR
       })), React.createElement("div", {
+        /* The control is the label block, not the whole card: a card-sized
+           button reads its entire contents as one name and, at large text
+           sizes, is tall enough to straddle the tab bar. */
+        role: "button",
+        tabIndex: 0,
+        onKeyDown: lkKeyActivate,
         style: {
           flex: 1
         }
@@ -18443,7 +18834,7 @@ function DayNutritionPanel(p) {
     }, " of \u2248", goal, " ", n.u) : null));
   }), anyGap && React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 4
     }
@@ -18540,7 +18931,7 @@ function TrendsTab(p) {
     });
   })), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 4
     }
@@ -18742,6 +19133,9 @@ function RecipeLogSheet(p) {
     p.onClose(true);
   }
   return React.createElement("div", {
+    ref: lkDialogRef,
+    tabIndex: -1,
+    "aria-modal": "true",
     role: "dialog",
     "aria-label": "Log " + p.name,
     style: {
@@ -18775,7 +19169,7 @@ function RecipeLogSheet(p) {
       border: "1px solid " + BORD,
       width: "100%",
       maxWidth: 420,
-      padding: "18px 18px 28px"
+      padding: "18px 18px calc(env(safe-area-inset-bottom, 0px) + 28px)"
     }
   }, React.createElement("p", {
     style: {
@@ -18830,7 +19224,7 @@ function RecipeLogSheet(p) {
     "aria-label": "Fewer servings",
     style: {
       width: 36,
-      height: 36,
+      minHeight: 36,
       borderRadius: 9,
       border: "1px solid " + BORD,
       background: CARD,
@@ -18854,7 +19248,7 @@ function RecipeLogSheet(p) {
     "aria-label": "More servings",
     style: {
       width: 36,
-      height: 36,
+      minHeight: 36,
       borderRadius: 9,
       border: "1px solid " + BORD,
       background: CARD,
@@ -19160,7 +19554,7 @@ function RecipeBuilder(p) {
       "aria-label": "Remove " + ing.name,
       style: {
         width: 22,
-        height: 22,
+        minHeight: 22,
         borderRadius: 5,
         border: "1px solid " + BORD,
         background: "none",
@@ -19303,7 +19697,7 @@ function RecipeBuilder(p) {
     });
   })), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginBottom: 8
     }
@@ -19372,7 +19766,7 @@ function RecipeBuilder(p) {
     "aria-label": "Fewer servings",
     style: {
       width: 30,
-      height: 30,
+      minHeight: 30,
       borderRadius: 8,
       border: "1px solid " + BORD,
       background: SU,
@@ -19396,7 +19790,7 @@ function RecipeBuilder(p) {
     "aria-label": "More servings",
     style: {
       width: 30,
-      height: 30,
+      minHeight: 30,
       borderRadius: 8,
       border: "1px solid " + BORD,
       background: SU,
@@ -19915,7 +20309,7 @@ function BarcodeTab(p) {
     }
   }, "Back")), item.src === "off" && React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       textAlign: "center",
       margin: "10px 0 0"
@@ -20216,7 +20610,7 @@ function FuelDisplayCard() {
     }
   }, "Hide calorie numbers"), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 1
     }
@@ -20268,7 +20662,7 @@ function FuelDisplayCard() {
     }
   }, "Dashboard framing"), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 1
     }
@@ -20421,7 +20815,7 @@ function TdeeReportCard() {
     "aria-expanded": showInfo,
     style: {
       width: 20,
-      height: 20,
+      minHeight: 20,
       borderRadius: "50%",
       border: "1px solid " + BORD,
       background: "none",
@@ -20439,7 +20833,7 @@ function TdeeReportCard() {
     "aria-label": "Dismiss check-in",
     style: {
       width: 20,
-      height: 20,
+      minHeight: 20,
       borderRadius: 5,
       border: "none",
       background: "none",
@@ -20457,7 +20851,7 @@ function TdeeReportCard() {
     }
   }, "We estimate you burn \u2248", React.createElement("b", null, prof.adaptiveTDEE || prof.tdee), " kcal/day, from ", entry.daysUsed, " logged days and your weight trend.", delta !== 0 ? " Targets nudged " + (delta > 0 ? "+" : "") + delta + " kcal." : " Targets unchanged this week."), showInfo && React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       lineHeight: 1.6,
       marginTop: 8
@@ -21709,7 +22103,11 @@ function McOnboarding(p) {
     }
   }, React.createElement("div", {
     style: {
-      padding: "52px 22px 0"
+      padding: "max(58px, calc(env(safe-area-inset-top, 0px) + 10px)) 22px 0",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      background: SURF
     }
   }, React.createElement("div", {
     style: {
@@ -21719,6 +22117,7 @@ function McOnboarding(p) {
       marginBottom: 22
     }
   }, React.createElement("button", {
+    "aria-label": "Back",
     onClick: function () {
       step === 0 ? p.onBack() : setStep(step - 1);
     },
@@ -21772,6 +22171,7 @@ function McOnboarding(p) {
   }, content)));
 }
 function McLogSheet(p) {
+  var sheet = useSheetDrag(p.onClose);
   var iso = p.iso;
   var d = p.days[iso] || {};
   var sym = d.sym || {};
@@ -21801,7 +22201,7 @@ function McLogSheet(p) {
   var isToday = iso === mcTodayISO();
   var sevLabel = ["", "Mild", "Moderate", "Severe"];
   return React.createElement("div", {
-    onClick: p.onClose,
+    onClick: function () { sheet.close(); },
     style: {
       position: "fixed",
       inset: 0,
@@ -21812,6 +22212,7 @@ function McLogSheet(p) {
       justifyContent: "center"
     }
   }, React.createElement("div", {
+    ref: sheet.ref,
     onClick: function (e) {
       e.stopPropagation();
     },
@@ -21826,15 +22227,20 @@ function McLogSheet(p) {
       animation: "slideUp .3s cubic-bezier(0.32,0.72,0,1)",
       border: "1px solid " + BORD
     }
-  }, React.createElement("div", {
-    style: {
+  }, React.createElement("div", _extends({}, sheet.zone, {
+    style: Object.assign({
       width: 38,
       height: 4,
       borderRadius: 2,
       background: SU,
-      margin: "0 auto 14px"
-    }
-  }), React.createElement("div", {
+      margin: "0 auto 14px",
+      /* the pill is thin, so the grab area is padded out to a usable size */
+      boxSizing: "content-box",
+      padding: "10px 24px",
+      marginLeft: "auto",
+      marginRight: "auto"
+    }, sheet.zone.style)
+  })), React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
@@ -21848,7 +22254,7 @@ function McLogSheet(p) {
       color: TX
     }
   }, isToday ? "TODAY" : mcFmt(iso).toUpperCase()), React.createElement("button", {
-    onClick: p.onClose,
+    onClick: function () { sheet.close(); },
     style: {
       background: CARD,
       border: "1px solid " + BORD,
@@ -22088,7 +22494,7 @@ function McLogSheet(p) {
       },
       style: {
         flex: 1,
-        height: 34,
+        minHeight: 34,
         borderRadius: 8,
         border: "1.5px solid " + (act ? OR : BORD),
         background: act ? OR_H + "22" : CARD,
@@ -22126,7 +22532,7 @@ function McLogSheet(p) {
       },
       style: {
         flex: 1,
-        height: 34,
+        minHeight: 34,
         borderRadius: 8,
         border: "1.5px solid " + (act ? BLU_H : BORD),
         background: act ? BLU_H + "1A" : CARD,
@@ -22426,6 +22832,7 @@ function McCalendar(p) {
       marginBottom: 12
     }
   }, React.createElement("button", {
+    "aria-label": "Previous month",
     onClick: function () {
       setYm(m === 0 ? [y - 1, 11] : [y, m - 1]);
     },
@@ -22434,7 +22841,7 @@ function McCalendar(p) {
       border: "none",
       borderRadius: 8,
       width: 32,
-      height: 32,
+      minHeight: 32,
       cursor: "pointer",
       color: TX,
       fontSize: "0.875rem"
@@ -22447,6 +22854,7 @@ function McCalendar(p) {
       letterSpacing: "0.04em"
     }
   }, mnames[m].toUpperCase(), " ", y), React.createElement("button", {
+    "aria-label": "Next month",
     onClick: function () {
       setYm(m === 11 ? [y + 1, 0] : [y, m + 1]);
     },
@@ -22455,7 +22863,7 @@ function McCalendar(p) {
       border: "none",
       borderRadius: 8,
       width: 32,
-      height: 32,
+      minHeight: 32,
       cursor: "pointer",
       color: TX,
       fontSize: "0.875rem"
@@ -22681,6 +23089,7 @@ function McCalendar(p) {
   }, "Your last ", C.lens.length, " cycle lengths in days \xB7 average ", C.avgLen, "d. This is what predictions are built from.")));
 }
 function McSettings(p) {
+  var sheet = useSheetDrag(p.onClose);
   var mcp = p.mcp;
   var [confirmDel, setConfirmDel] = useState(false);
   function upd(patch) {
@@ -22745,7 +23154,7 @@ function McSettings(p) {
     }));
   }
   return React.createElement("div", {
-    onClick: p.onClose,
+    onClick: function () { sheet.close(); },
     style: {
       position: "fixed",
       inset: 0,
@@ -22756,6 +23165,7 @@ function McSettings(p) {
       justifyContent: "center"
     }
   }, React.createElement("div", {
+    ref: sheet.ref,
     onClick: function (e) {
       e.stopPropagation();
     },
@@ -22770,15 +23180,20 @@ function McSettings(p) {
       animation: "slideUp .3s cubic-bezier(0.32,0.72,0,1)",
       border: "1px solid " + BORD
     }
-  }, React.createElement("div", {
-    style: {
+  }, React.createElement("div", _extends({}, sheet.zone, {
+    style: Object.assign({
       width: 38,
       height: 4,
       borderRadius: 2,
       background: SU,
-      margin: "0 auto 14px"
-    }
-  }), React.createElement("div", {
+      margin: "0 auto 14px",
+      /* the pill is thin, so the grab area is padded out to a usable size */
+      boxSizing: "content-box",
+      padding: "10px 24px",
+      marginLeft: "auto",
+      marginRight: "auto"
+    }, sheet.zone.style)
+  })), React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
@@ -22792,7 +23207,7 @@ function McSettings(p) {
       color: TX
     }
   }, "CYCLE SETTINGS"), React.createElement("button", {
-    onClick: p.onClose,
+    onClick: function () { sheet.close(); },
     style: {
       background: CARD,
       border: "1px solid " + BORD,
@@ -23089,7 +23504,7 @@ function McHealthCard(p) {
     }
   }, "Got it")), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 9,
       lineHeight: 1.4
@@ -23175,7 +23590,7 @@ function McRecoveryCard(p) {
     }
   }, "Get medical help"), " for bleeding that soaks two pads an hour for two hours, a fever, severe pain, or foul-smelling discharge.")), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 9,
       lineHeight: 1.4
@@ -23365,7 +23780,7 @@ function McTrainingCard(p) {
     }
   }, body), actions, React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 9,
       lineHeight: 1.4
@@ -23390,6 +23805,7 @@ function McNutritionCard(p) {
       position: "relative"
     }
   }, React.createElement("button", {
+    "aria-label": "Close",
     onClick: function () {
       p.updateDay(C.todayISO, {
         nutriDismissed: true
@@ -23594,7 +24010,7 @@ function McFuelStrip(p) {
     }
   })), p.iron.partial && React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 3
     }
@@ -23668,6 +24084,9 @@ function McTrainBanner(p) {
   var rough = sym.cramps >= 2 || sym.fatigue >= 2 || sym.headache >= 2 || t.energy && t.energy <= 2;
   if (!rough || t.coach === "kept") return null;
   return React.createElement("div", {
+    role: "button",
+    tabIndex: 0,
+    onKeyDown: lkKeyActivate,
     onClick: function () {
       p.go("cycletrack");
     },
@@ -23735,9 +24154,14 @@ function CycleTrackerScreen(p) {
   if (!isFemaleUser(p.profile)) {
     return React.createElement("div", {
       style: {
-        padding: "52px 22px"
-      }
+        padding: "max(58px, calc(env(safe-area-inset-top, 0px) + 10px)) 22px",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      background: SURF
+    }
     }, React.createElement("button", {
+    "aria-label": "Back",
       onClick: function () {
         p.go("home");
       },
@@ -24061,7 +24485,7 @@ function CycleTrackerScreen(p) {
   }, "Back to today")), C.day != null && !C.pregRecovery && !preview && React.createElement("p", {
     style: {
       textAlign: "center",
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 2
     }
@@ -24390,7 +24814,7 @@ function CycleTrackerScreen(p) {
     });
   }()), C.irregular && !C.stale && !C.pregRecovery && C.nextStart && React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       lineHeight: 1.5,
       marginTop: -6
@@ -24561,13 +24985,13 @@ function CycleTrackerScreen(p) {
     }, e2[1]));
   }), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       lineHeight: 1.4
     }
   }, "General guidance, not medical advice."))), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       textAlign: "center",
       lineHeight: 1.5,
@@ -24907,8 +25331,12 @@ function HomeScreen(p) {
       }
     }, React.createElement("div", {
       style: {
-        padding: "52px 24px 0"
-      }
+        padding: "max(58px, calc(env(safe-area-inset-top, 0px) + 10px)) 24px 0",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      background: SURF
+    }
     }, React.createElement("button", {
       onClick: function () {
         setShowRecap(false);
@@ -25057,7 +25485,11 @@ function HomeScreen(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: "linear-gradient(180deg," + OR_H + "18 0%,transparent 100%)"
+      background: "linear-gradient(180deg," + OR_H + "18 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
     }
   }, React.createElement("div", {
     style: {
@@ -25110,7 +25542,7 @@ function HomeScreen(p) {
   }, streak)))), React.createElement("div", {
     style: {
       width: 44,
-      height: 44,
+      minHeight: 44,
       borderRadius: "50%",
       background: "linear-gradient(135deg," + OR_H + "," + ORD_H + ")",
       display: "flex",
@@ -25411,6 +25843,9 @@ function HomeScreen(p) {
           }
         }, "See all")), history.slice(0, 5).map(function (w, i) {
           return React.createElement("div", {
+            role: "button",
+            tabIndex: 0,
+            onKeyDown: lkKeyActivate,
             key: i,
             onClick: function () {
               setSelectedWorkout(w);
@@ -25796,6 +26231,7 @@ function GoalsTab(p) {
         marginBottom: 16
       }
     }, React.createElement("button", {
+    "aria-label": "Back",
       onClick: function () {
         setShowBfLog(false);
       },
@@ -26001,6 +26437,7 @@ function GoalsTab(p) {
         marginBottom: 16
       }
     }, React.createElement("button", {
+    "aria-label": "Back",
       onClick: function () {
         setView("list");
         setSelIdx(null);
@@ -26031,6 +26468,7 @@ function GoalsTab(p) {
         fontWeight: 600
       }
     }, typeInfo.icon, " ", typeInfo.name, exName ? " — " + exName : "")), React.createElement("button", {
+    "aria-label": "Edit goal",
       onClick: function () {
         openEdit(selIdx);
       },
@@ -26368,6 +26806,7 @@ function GoalsTab(p) {
         color: TX
       }
     }, editIdx !== null ? "Edit" : "New", " Goal"), React.createElement("button", {
+    "aria-label": "Close",
       onClick: function () {
         setView("list");
       },
@@ -26861,7 +27300,7 @@ function GoalsTab(p) {
   }), " NEW GOAL"));
 }
 function ProgressPage(p) {
-  var [tab, setTab] = useState("overview");
+  var [tab, setTab] = useHubState("progressTab", "overview", ["overview", "goals", "calendar", "photos", "prs"]);
   var [featuredIds, setFeaturedIdsRaw] = useState(function () {
     return ld("featuredLifts", []);
   });
@@ -26996,8 +27435,11 @@ function ProgressPage(p) {
     }, React.createElement("div", {
       style: {
         padding: "52px 20px 16px",
-        background: SURF
-      }
+        background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
+    }
     }, React.createElement("div", {
       style: {
         display: "flex",
@@ -27005,6 +27447,7 @@ function ProgressPage(p) {
         gap: 12
       }
     }, React.createElement("button", {
+    "aria-label": "Back",
       onClick: function () {
         setShowAddLift(false);
         setLiftSearch("");
@@ -27045,6 +27488,9 @@ function ProgressPage(p) {
       }
     }), available.map(function (ex) {
       return React.createElement("div", {
+        role: "button",
+        tabIndex: 0,
+        onKeyDown: lkKeyActivate,
         key: ex.id,
         onClick: function () {
           setFeaturedIds(function (prev) {
@@ -27107,7 +27553,11 @@ function ProgressPage(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 0",
-      background: "linear-gradient(180deg," + OR_H + "18 0%,transparent 100%)"
+      background: "linear-gradient(180deg," + OR_H + "18 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
     }
   }, React.createElement("div", {
     style: {
@@ -27117,6 +27567,7 @@ function ProgressPage(p) {
       marginBottom: 16
     }
   }, React.createElement("button", {
+    "aria-label": "Back",
     onClick: function () {
       p.go("home");
     },
@@ -27242,6 +27693,7 @@ function ProgressPage(p) {
         color: MU
       }
     }, ex.muscle))), React.createElement("button", {
+    "aria-label": "Close",
       onClick: function () {
         setFeaturedIds(function (prev) {
           return prev.filter(function (id) {
@@ -27730,7 +28182,10 @@ function PRHub(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -27740,6 +28195,7 @@ function PRHub(p) {
       marginBottom: 4
     }
   }, React.createElement("button", {
+    "aria-label": "Back",
     onClick: function () {
       setLogging(false);
     },
@@ -27910,8 +28366,12 @@ function PRHub(p) {
     }, React.createElement("div", {
       style: {
         padding: "52px 20px 16px",
-        background: "linear-gradient(180deg," + OR_H + "15 0%,transparent 100%)"
-      }
+        background: "linear-gradient(180deg," + OR_H + "15 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
+    }
     }, React.createElement("div", {
       style: {
         display: "flex",
@@ -27919,6 +28379,7 @@ function PRHub(p) {
         gap: 12
       }
     }, React.createElement("button", {
+    "aria-label": "Back",
       onClick: function () {
         setSel(null);
       },
@@ -27994,7 +28455,7 @@ function PRHub(p) {
         }, React.createElement("div", {
           style: {
             width: 44,
-            height: 44,
+            minHeight: 44,
             borderRadius: 12,
             background: row.rec ? row.colour === TX ? SU : OR_H + "18" : SU,
             display: "flex",
@@ -28046,7 +28507,7 @@ function PRHub(p) {
         }
       }, React.createElement("p", {
         style: {
-          fontSize: "0.6875rem",
+          fontSize: "0.8125rem",
           color: MU,
           fontWeight: 700,
           marginBottom: 8
@@ -28075,14 +28536,14 @@ function PRHub(p) {
           x: x + bW / 2,
           y: y - 4,
           textAnchor: "middle",
-          fontSize: 8,
+          fontSize: 10,
           fill: OR,
           fontWeight: "700"
         }, e.est), React.createElement("text", {
           x: x + bW / 2,
           y: cH + 14,
           textAnchor: "middle",
-          fontSize: 8,
+          fontSize: 10,
           fill: MU,
           fontWeight: "600"
         }, e.r, "RM"));
@@ -28137,7 +28598,10 @@ function PRHub(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 0",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, p.onBack ? React.createElement("div", {
     style: {
@@ -28149,6 +28613,7 @@ function PRHub(p) {
       borderBottom: "1px solid " + BORD
     }
   }, React.createElement("button", {
+    "aria-label": "Back",
     onClick: p.onBack,
     style: {
       background: "none",
@@ -28472,6 +28937,9 @@ function PRHub(p) {
   }).map(function (ex) {
     var exPrs = p.prs[ex.id] || [];
     return React.createElement("div", {
+      role: "button",
+      tabIndex: 0,
+      onKeyDown: lkKeyActivate,
       key: ex.id,
       onClick: function () {
         setSel(ex.id);
@@ -28556,7 +29024,7 @@ function PRHub(p) {
           }
         }, React.createElement("p", {
           style: {
-            fontSize: "0.625rem",
+            fontSize: "0.6875rem",
             color: MU,
             fontWeight: 700,
             whiteSpace: "nowrap"
@@ -28718,7 +29186,13 @@ function ProfileScreen(p) {
   }, "SIGN UP")), React.createElement("div", {
     style: {
       padding: (isGuest ? "18px" : "52px") + " 20px 18px",
-      background: "linear-gradient(180deg," + OR_H + "20 0%,transparent 100%)"
+      background: "linear-gradient(180deg," + OR_H + "20 0%,transparent 100%)",
+      /* identity row doubles as this screen's chrome (it carries the
+         Settings action), so it pins with the rest of the frames */
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
     }
   }, React.createElement("div", {
     style: {
@@ -28730,7 +29204,7 @@ function ProfileScreen(p) {
   }, React.createElement("div", {
     style: {
       width: 62,
-      height: 62,
+      minHeight: 62,
       borderRadius: "50%",
       background: "linear-gradient(135deg," + OR_H + "," + ORD_H + ")",
       display: "flex",
@@ -28859,7 +29333,7 @@ function ProfileScreen(p) {
     }, React.createElement("div", {
       style: {
         width: 38,
-        height: 38,
+        minHeight: 38,
         borderRadius: 10,
         background: b.col + "25",
         display: "flex",
@@ -28905,7 +29379,7 @@ function ProfileScreen(p) {
     }, React.createElement("div", {
       style: {
         width: 38,
-        height: 38,
+        minHeight: 38,
         borderRadius: 10,
         background: LOCKED_BADGE + "22",
         display: "flex",
@@ -29071,6 +29545,11 @@ function ProgressPhotos() {
     if (!file) return;
     resizeImage(file, 800, function (thumb) {
       var updated = saveProgressPhoto(thumb, note.trim());
+      if (!updated) {
+        /* Out of room. sd() has already surfaced why; keep the note so the
+           entry is not lost along with the photo. */
+        return;
+      }
       setPhotos(updated);
       setNote("");
     });
@@ -29423,7 +29902,7 @@ function ProgressPhotos() {
     c: OR
   })), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: OR,
       fontWeight: 600,
       flex: 1,
@@ -29461,7 +29940,7 @@ function ProgressPhotos() {
       left: 0,
       right: 0,
       width: "100%",
-      padding: "52px 16px 16px",
+      padding: "max(58px, calc(env(safe-area-inset-top, 0px) + 10px)) 16px 16px",
       display: "flex",
       alignItems: "flex-start",
       justifyContent: "space-between",
@@ -29873,7 +30352,10 @@ function LayoutEditor(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -29882,6 +30364,7 @@ function LayoutEditor(p) {
       gap: 12
     }
   }, React.createElement("button", {
+    "aria-label": "Back",
     onClick: p.onBack,
     style: {
       background: "none",
@@ -29943,6 +30426,7 @@ function LayoutEditor(p) {
         gap: 2
       }
     }, React.createElement("button", {
+    "aria-label": "Move up",
       onClick: function () {
         move(id, -1);
       },
@@ -29952,13 +30436,14 @@ function LayoutEditor(p) {
         border: "none",
         borderRadius: 7,
         width: 30,
-        height: 24,
+        minHeight: 24,
         cursor: i === 0 ? "default" : "pointer",
         color: i === 0 ? BORD : TX,
         fontSize: "0.75rem",
         opacity: i === 0 ? 0.4 : 1
       }
     }, "\u25B2"), React.createElement("button", {
+    "aria-label": "Move down",
       onClick: function () {
         move(id, 1);
       },
@@ -29968,7 +30453,7 @@ function LayoutEditor(p) {
         border: "none",
         borderRadius: 7,
         width: 30,
-        height: 24,
+        minHeight: 24,
         cursor: i === layout.order.length - 1 ? "default" : "pointer",
         color: i === layout.order.length - 1 ? BORD : TX,
         fontSize: "0.75rem",
@@ -30181,7 +30666,7 @@ function NotificationsCard() {
 
     if (st.permission === "denied" && !st.enabled) {
       kids.push(React.createElement("p", {
-        key: "denied", style: { fontSize: "0.6875rem", color: RE, lineHeight: 1.5, margin: 0 }
+        key: "denied", style: { fontSize: "0.8125rem", color: RE, lineHeight: 1.5, margin: 0 }
       }, "Notifications are blocked for this site in your browser or phone settings. Allow them there, then flip this on."));
     }
 
@@ -30209,7 +30694,7 @@ function NotificationsCard() {
         style: { background: SURF, borderRadius: 10, padding: "12px 14px", border: "1px solid " + BORD }
       },
         React.createElement("p", { style: { fontSize: "0.8125rem", fontWeight: 600, color: TX, margin: 0 } }, "Rest timer sound"),
-        React.createElement("p", { style: { fontSize: "0.6875rem", color: MU, margin: "1px 0 10px", lineHeight: 1.45 } },
+        React.createElement("p", { style: { fontSize: "0.8125rem", color: MU, margin: "1px 0 10px", lineHeight: 1.45 } },
           "Plays when the app is on screen. A locked phone uses your system notification sound — no browser lets a website change that."),
         React.createElement("div", { style: { display: "flex", gap: 6 } },
           [["bell", "Bell"], ["plate", "Plates"], ["none", "Silent"]].map(function (opt) {
@@ -30256,6 +30741,92 @@ function NotificationsCard() {
     React.createElement("p", { style: { fontSize: "0.75rem", color: MU, lineHeight: 1.5, marginBottom: 12 } },
       "Rest timer alerts and a daily nudge — delivered even when the app is closed."),
     body
+  );
+}
+
+function TextSizeCard() {
+  /* The rem architecture was already right; nothing ever changed the root, so
+     an installed PWA (which has no Safari page zoom) gave Dynamic Type users
+     no enlargement whatsoever. */
+  var [scale, setScale] = useState(function () {
+    var v = parseInt(ld("textScale", 100), 10);
+    return isNaN(v) ? 100 : v;
+  });
+  function apply(v) {
+    setScale(v);
+    sd("textScale", v);
+    document.documentElement.style.fontSize = v === 100 ? "" : v + "%";
+  }
+  var OPTIONS = [[100, "Default"], [110, "Large"], [125, "Larger"], [150, "Largest"]];
+  return React.createElement("div", {
+    style: {
+      background: CARD, borderRadius: 13, padding: "16px",
+      border: "1px solid " + BORD, marginTop: 8
+    }
+  }, React.createElement("p", {
+    style: { fontSize: "0.6875rem", fontWeight: 700, color: MU, marginBottom: 8 }
+  }, "TEXT SIZE"), React.createElement("div", {
+    style: { display: "flex", gap: 8 }
+  }, OPTIONS.map(function (o) {
+    var on = scale === o[0];
+    return React.createElement("button", {
+      key: o[0],
+      onClick: function () { apply(o[0]); },
+      "aria-pressed": on ? "true" : "false",
+      style: {
+        flex: 1, padding: "10px 6px", borderRadius: 10,
+        border: "1px solid " + (on ? OR : BORD),
+        background: on ? OR_H + "18" : "transparent",
+        color: on ? OR : MU, fontSize: "0.75rem", fontWeight: 700,
+        cursor: "pointer"
+      }
+    }, o[1]);
+  })), React.createElement("p", {
+    style: { fontSize: "0.75rem", color: MU, lineHeight: 1.5, marginTop: 10 }
+  }, "Scales everything in the app. Useful in a standalone install, where the browser's own zoom is not available."));
+}
+
+function StorageCard() {
+  /* The 5 MB localStorage budget is shared by every key, and progress photos
+     are the only thing in it that grows without limit. Once it is gone every
+     save fails, so the ceiling is worth showing before it is reached rather
+     than after. */
+  var [usage, setUsage] = useState(function () { return lkStorageUsage(); });
+  useEffect(function () {
+    function refresh() { setUsage(lkStorageUsage()); }
+    window.addEventListener("lockedStorageFull", refresh);
+    var t = setInterval(refresh, 5000);
+    return function () {
+      window.removeEventListener("lockedStorageFull", refresh);
+      clearInterval(t);
+    };
+  }, []);
+  function mb(b) { return (b / 1048576).toFixed(1) + " MB"; }
+  var pct = Math.min(100, Math.round(usage.totalBytes / usage.budgetBytes * 100));
+  var tight = pct >= 80;
+  return React.createElement("div", {
+    style: {
+      background: CARD, borderRadius: 13, padding: "16px",
+      border: "1px solid " + (tight ? WA_H + "50" : BORD), marginTop: 8
+    }
+  }, React.createElement("p", {
+    style: { fontSize: "0.6875rem", fontWeight: 700, color: MU, marginBottom: 8 }
+  }, "ON-DEVICE STORAGE"), React.createElement("div", {
+    style: {
+      height: 8, borderRadius: 999, background: SU, overflow: "hidden", marginBottom: 8
+    }
+  }, React.createElement("div", {
+    style: {
+      width: pct + "%", height: "100%", borderRadius: 999,
+      background: tight ? WA : GR, transition: "width .3s ease"
+    }
+  })), React.createElement("p", {
+    style: { fontSize: "0.75rem", color: MU, lineHeight: 1.5 }
+  }, mb(usage.totalBytes) + " of about " + mb(usage.budgetBytes) + " used" +
+     (usage.photoBytes ? " \u00b7 progress photos are " + mb(usage.photoBytes) : "")),
+    tight && React.createElement("p", {
+      style: { fontSize: "0.75rem", color: WA, lineHeight: 1.5, marginTop: 6, fontWeight: 600 }
+    }, "Running low. Delete a few progress photos in Progress to keep saving.")
   );
 }
 
@@ -30352,7 +30923,10 @@ function SettingsScreen(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -31068,7 +31642,7 @@ function SettingsScreen(p) {
     }
   }, "Daily check-ins"), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginBottom: 10,
       lineHeight: 1.45
@@ -31203,7 +31777,7 @@ function SettingsScreen(p) {
     }
   }, "Partial Reps"), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 1
     }
@@ -31256,7 +31830,7 @@ function SettingsScreen(p) {
     }
   }, "Streaks and badges"), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 1
     }
@@ -31314,7 +31888,7 @@ function SettingsScreen(p) {
     }
   }, "Unit conversion"), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 1
     }
@@ -31354,7 +31928,7 @@ function SettingsScreen(p) {
     style: {
       marginTop: 16
     }
-  }, "DATA & SYNC"), React.createElement(PrivacyCard, null), React.createElement("div", {
+  }, "DATA & SYNC"), React.createElement(PrivacyCard, null), React.createElement(TextSizeCard, null), React.createElement(StorageCard, null), React.createElement("div", {
     style: {
       background: CARD,
       borderRadius: 13,
@@ -31449,7 +32023,7 @@ function SettingsScreen(p) {
     }
   }, "Microphone Button"), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 1
     }
@@ -31523,7 +32097,7 @@ function SettingsScreen(p) {
     }
   }, "Cycle Logging"), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 1
     }
@@ -31655,7 +32229,7 @@ function SettingsScreen(p) {
     }
   }, "Beta Tester Agreement"), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       lineHeight: 1.6,
       marginBottom: 8
@@ -31670,14 +32244,14 @@ function SettingsScreen(p) {
     }
   }, "\u2022 ", "Workout data (exercises, sets, reps, weights)", "\n", "\u2022 ", "AI coach interactions (your questions and AI responses)", "\n", "\u2022 ", "Check-in entries (mood, energy, stress ratings)", "\n", "\u2022 ", "Nutrition and weight log data", "\n", "\u2022 ", "App usage activity"), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       lineHeight: 1.6,
       marginBottom: 8
     }
   }, "This data is used solely to improve LOCKED and will not be shared with third parties. You can stop participating at any time."), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       lineHeight: 1.6,
       marginBottom: 12
@@ -32301,7 +32875,7 @@ function Onboarding(p) {
     }
   }, "Beta Tester Agreement"), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       lineHeight: 1.6,
       marginBottom: 8
@@ -32316,14 +32890,14 @@ function Onboarding(p) {
     }
   }, "\u2022 ", "Workout data (exercises, sets, reps, weights)", "\n", "\u2022 ", "AI coach interactions (your questions and AI responses)", "\n", "\u2022 ", "Check-in entries (mood, energy, stress ratings)", "\n", "\u2022 ", "Nutrition and weight log data", "\n", "\u2022 ", "App usage activity"), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       lineHeight: 1.6,
       marginBottom: 8
     }
   }, "This data is used solely to improve LOCKED and will not be shared with third parties. You can stop participating at any time."), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       lineHeight: 1.6,
       marginBottom: 12
@@ -32345,7 +32919,7 @@ function Onboarding(p) {
     }
   }, "I Agree")), betaClaimed && betaAgreed && React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: GR,
       marginTop: 4
     }
@@ -32367,7 +32941,7 @@ function Onboarding(p) {
     }
   }, "GET STARTED"), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       textAlign: "center",
       maxWidth: 300,
@@ -32528,6 +33102,9 @@ function Onboarding(p) {
   }].map(function (opt) {
     var act = unitChoice === opt.id;
     return React.createElement("div", {
+      role: "button",
+      tabIndex: 0,
+      onKeyDown: lkKeyActivate,
       key: opt.id,
       onClick: function () {
         setUnitChoice(opt.id);
@@ -32869,6 +33446,7 @@ function Onboarding(p) {
       outline: "none"
     }
   }), React.createElement("button", {
+    "aria-label": "Send answer",
     onClick: send,
     disabled: !input.trim() || aiLoading,
     style: {
@@ -34073,7 +34651,10 @@ function FuelProfileSetup(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 20px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -34083,6 +34664,7 @@ function FuelProfileSetup(p) {
       marginBottom: 4
     }
   }, p.onBack && React.createElement("button", {
+    "aria-label": "Back",
     onClick: p.onBack,
     style: {
       background: "none",
@@ -34359,6 +34941,9 @@ function FuelProfileSetup(p) {
   }, acts.map(function (a) {
     var act = activity === a.id;
     return React.createElement("div", {
+      role: "button",
+      tabIndex: 0,
+      onKeyDown: lkKeyActivate,
       key: a.id,
       onClick: function () {
         setActivity(a.id);
@@ -34419,6 +35004,9 @@ function FuelProfileSetup(p) {
   }, goals.map(function (g) {
     var act = goal === g.id;
     return React.createElement("div", {
+      role: "button",
+      tabIndex: 0,
+      onKeyDown: lkKeyActivate,
       key: g.id,
       onClick: function () {
         setGoal(g.id);
@@ -34783,6 +35371,7 @@ function WaterCard(p) {
       }
     }, "+", amt);
   }), waterMl > 0 && React.createElement("button", {
+    "aria-label": "Remove one glass",
     onClick: minus,
     style: {
       padding: "8px 8px",
@@ -34930,7 +35519,7 @@ function SmartNutritionCard(p) {
     },
     style: {
       width: 28,
-      height: 28,
+      minHeight: 28,
       borderRadius: 8,
       border: "1px solid " + BORD,
       background: "transparent",
@@ -35014,8 +35603,9 @@ function SmartNutritionCard(p) {
   }, added ? "✓ Added to log" : "Add to today's log"))));
 }
 function FuelTab(p) {
-  var [tab, setTab] = useState("list");
-  var [view, setView] = useState("main");
+  var [tab, setTab] = useHubState("fuelTab", "list", ["list", "search", "scan", "photo", "trends", "recipes", "supps", "plan", "cycle"]);
+  var [view, setView] = useHubState("fuelView", "main");
+  useTabReset("fuel", function () { setView("main"); setTab("list"); });
   var todayISO = isoDay();
   var [fuelLog, setFuelLogRaw] = useState(function () {
     return ld("fuelLog", {});
@@ -35202,8 +35792,13 @@ function FuelTab(p) {
     }
   }, React.createElement("div", {
     style: {
-      padding: "52px 20px 16px",
-      background: "linear-gradient(180deg," + OR_H + "18 0%,transparent 100%)"
+      /* the pinned frame: title and actions only - the summary cards
+         below scroll like content, they are content */
+      padding: "52px 20px 12px",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      background: SURF
     }
   }, React.createElement("div", {
     style: {
@@ -35265,7 +35860,12 @@ function FuelTab(p) {
     d: D.edit,
     z: 13,
     c: MU
-  }), " My Profile"))), React.createElement("div", {
+  }), " My Profile")))), React.createElement("div", {
+    style: {
+      padding: "0 20px 16px",
+      background: "linear-gradient(180deg," + OR_H + "18 0%,transparent 100%)"
+    }
+  }, React.createElement("div", {
     style: {
       background: CARD,
       borderRadius: 16,
@@ -35421,7 +36021,7 @@ function FuelTab(p) {
   }, "Refeed day active \u2014 carbs boosted by +", refeedCarbs, "g today")), function () {
     var outerMeals = tab === "plan" || tab === "recipes";
     var logTabs = [["list", "List"], ["search", "Search"], ["scan", "Scan"], ["photo", "Photo"], ["trends", "Trends"], ["supps", "Supps"]];
-    if (ld("perfTracking", false)) logTabs.push(["cycle", "Cycle"]);
+    if (ld("perfTracking", false)) logTabs.push(["cycle", "Stack"]);
     return React.createElement("div", {
       style: {
         marginTop: 12
@@ -36395,6 +36995,9 @@ function MealPlanFuelTab(p) {
         borderBottom: pi < plans.length - 1 ? "1px solid " + SU : "none"
       }
     }, React.createElement("div", {
+      role: "button",
+      tabIndex: 0,
+      onKeyDown: lkKeyActivate,
       onClick: function () {
         if (!isActive) {
           var reordered = [plan].concat(plans.filter(function (pp) {
@@ -36477,7 +37080,7 @@ function MealPlanFuelTab(p) {
         border: "1px solid " + RE_H + "30",
         borderRadius: 6,
         width: 28,
-        height: 28,
+        minHeight: 28,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -36503,7 +37106,7 @@ function MealPlanFuelTab(p) {
       width: "100%",
       background: CARD,
       borderRadius: "20px 20px 0 0",
-      padding: "20px",
+      padding: "20px 20px calc(env(safe-area-inset-bottom, 0px) + 20px)",
       border: "1px solid " + BORD,
       borderBottom: "none",
       maxHeight: "80vh",
@@ -37069,6 +37672,7 @@ function ListTab(p) {
             fontWeight: 600
           }
         }, entry.item.cal || 0, "kcal"))), React.createElement("button", {
+    "aria-label": "Close",
           onClick: function () {
             p.removeItem(entry.meal, entry.idx);
           },
@@ -37240,6 +37844,7 @@ function ManualEntry(p) {
       color: TX
     }
   }, "Custom Entry"), React.createElement("button", {
+    "aria-label": "Close",
     onClick: function () {
       setShow(false);
     },
@@ -37764,6 +38369,7 @@ function SearchTab(p) {
         cursor: "pointer"
       }
     }, "Log"), React.createElement("button", {
+    "aria-label": "Clear search",
       onClick: function () {
         setStoreItems(storeItems.filter(function (_, j) {
           return j !== i;
@@ -37806,13 +38412,13 @@ function SearchTab(p) {
     }
   }, "fdc.nal.usda.gov"), "."), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginBottom: 16
     }
   }, "Leave blank to use the free shared key (1,000 req/hour)."), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       fontWeight: 700,
       color: MU,
       marginBottom: 8
@@ -37927,7 +38533,7 @@ function SearchTab(p) {
       color: "#fff",
       borderRadius: "50%",
       width: 16,
-      height: 16,
+      minHeight: 16,
       fontSize: "0.6875rem",
       fontWeight: 800,
       display: "flex",
@@ -38208,6 +38814,9 @@ function SearchTab(p) {
     var isFs = pr._fatsecret;
     var isBest = pr._best;
     return React.createElement("div", {
+      role: "button",
+      tabIndex: 0,
+      onKeyDown: lkKeyActivate,
       key: i,
       onClick: function () {
         setSelected(pr);
@@ -38323,6 +38932,9 @@ function SearchTab(p) {
       marginBottom: 8
     }
   }, "No results for \"", q, "\""), React.createElement("p", {
+    role: "button",
+    tabIndex: 0,
+    onKeyDown: lkKeyActivate,
     style: {
       fontSize: "0.75rem",
       color: OR,
@@ -38534,6 +39146,7 @@ function PhotoTab(p) {
       display: "block"
     }
   }), React.createElement("button", {
+    "aria-label": "Close",
     onClick: function () {
       setImgData(null);
       setResult(null);
@@ -39723,6 +40336,7 @@ function RecipesTab(p) {
         cursor: "pointer"
       }
     }, added[cr.id] ? "Added" : "Add to Diary"), React.createElement("button", {
+    "aria-label": "Add ingredients to shopping list",
       onClick: function () {
         var ings = cr.ingredients || [];
         for (var i = 0; i < ings.length; i++) {
@@ -40270,6 +40884,7 @@ function MyStoresTab() {
         flexShrink: 0
       }
     }, s.enabled ? "ON" : "OFF"), React.createElement("button", {
+    "aria-label": "Delete store",
       onClick: function () {
         deleteStore(s.id);
       },
@@ -40633,7 +41248,7 @@ function ShoppingTab(p) {
     }
   }, React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       fontWeight: 700,
       color: MU,
       marginBottom: 8
@@ -41198,6 +41813,7 @@ function ShoppingTab(p) {
           padding: "12px 12px"
         }
       }, React.createElement("button", {
+        "aria-label": item.checked ? "Mark as not picked up" : "Mark as picked up",
         onClick: function () {
           toggleItem(item.id);
         },
@@ -41496,7 +42112,7 @@ function PantryTab() {
     }
   }, React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       fontWeight: 700,
       color: RE,
       margin: "0 0 8px"
@@ -41656,7 +42272,7 @@ function PantryTab() {
         title: item.empty ? "Mark as restocked" : "Mark as out of stock",
         style: {
           width: 26,
-          height: 26,
+          minHeight: 26,
           borderRadius: "50%",
           flexShrink: 0,
           border: "2px solid " + (item.empty ? RE : BORD),
@@ -41706,7 +42322,7 @@ function PantryTab() {
         }
       }, item.store), item.empty && React.createElement("span", {
         style: {
-          fontSize: "0.6875rem",
+          fontSize: "0.8125rem",
           background: RE_H + "15",
           color: RE,
           padding: "2px 8px",
@@ -43160,6 +43776,7 @@ function MealPlannerTab() {
         marginBottom: 16
       }
     }, React.createElement("button", {
+    "aria-label": "Back",
       onClick: function () {
         setActivePlan(null);
       },
@@ -43597,6 +44214,9 @@ function MealPlannerTab() {
         alignItems: "center"
       }
     }, React.createElement("div", null, React.createElement("p", {
+      role: "button",
+      tabIndex: 0,
+      onKeyDown: lkKeyActivate,
       style: {
         fontSize: "0.875rem",
         fontWeight: 700,
@@ -43655,7 +44275,7 @@ function MealPlannerTab() {
         border: "1px solid " + RE_H + "30",
         borderRadius: 6,
         width: 28,
-        height: 28,
+        minHeight: 28,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -43728,7 +44348,7 @@ var FITNESS_PICKS = [{
   unit: "lb"
 }];
 function ShoppingBudgetTab(p) {
-  var [tab, setTab] = useState("shopping");
+  var [tab, setTab] = useHubState("shopTab", "shopping", ["shopping", "pantry", "stores", "budget"]);
   var tabs = [["shopping", "List"], ["pantry", "Pantry"], ["stores", "My Stores"], ["budget", "Budget"]];
   var listCount = getShoppingList().filter(function (x) {
     return !x.checked;
@@ -43758,8 +44378,18 @@ function ShoppingBudgetTab(p) {
     }
   }, React.createElement("div", {
     style: {
-      paddingTop: 52,
-      paddingBottom: 16
+      /* This header wrote its clearance as a number, so it missed both the
+         safe-area sweep and the frame pass; brought in line with the rest. */
+      paddingTop: "max(58px, calc(env(safe-area-inset-top, 0px) + 10px))",
+      paddingBottom: 16,
+      paddingLeft: 16,
+      paddingRight: 16,
+      marginLeft: -16,
+      marginRight: -16,
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      background: SURF
     }
   }, p.onBack && React.createElement("button", {
     onClick: function () {
@@ -44167,6 +44797,7 @@ function SupplementsTab() {
         marginBottom: 16
       }
     }, React.createElement("button", {
+    "aria-label": "Back",
       onClick: function () {
         setShowHistory(null);
       },
@@ -44311,6 +44942,7 @@ function SupplementsTab() {
       color: TX
     }
   }, editIdx !== null ? "Edit" : "Add", " Supplement"), React.createElement("button", {
+    "aria-label": "Close",
     onClick: function () {
       setShowAdd(false);
       setEditIdx(null);
@@ -44540,7 +45172,7 @@ function SupplementsTab() {
     }
   }, "Reminder"), React.createElement("p", {
     style: {
-      fontSize: "0.6875rem",
+      fontSize: "0.8125rem",
       color: MU,
       marginTop: 1
     }
@@ -44642,6 +45274,9 @@ function SupplementsTab() {
         fontSize: "1rem"
       }
     }, s.timeOf === "Morning" ? "🌅" : s.timeOf === "Pre-Workout" ? "💪" : s.timeOf === "Before Bed" ? "🌙" : s.timeOf === "With Food" ? "🍽️" : "💊")), React.createElement("div", {
+      role: "button",
+      tabIndex: 0,
+      onKeyDown: lkKeyActivate,
       style: {
         flex: 1,
         minWidth: 0,
@@ -44701,6 +45336,7 @@ function SupplementsTab() {
         flexShrink: 0
       }
     }, React.createElement("button", {
+    "aria-label": "Edit supplement",
       onClick: function () {
         openEdit(i);
       },
@@ -44720,6 +45356,7 @@ function SupplementsTab() {
       z: 13,
       c: MU
     })), React.createElement("button", {
+    "aria-label": "Delete supplement",
       onClick: function () {
         remove(i);
       },
@@ -45395,6 +46032,7 @@ function CycleTab() {
         color: TX
       }
     }, compEditIdx !== null ? "Edit" : "Add", " Compound"), React.createElement("button", {
+    "aria-label": "Close",
       onClick: function () {
         setShowCompForm(false);
         setCompEditIdx(null);
@@ -45591,6 +46229,7 @@ function CycleTab() {
         marginBottom: 16
       }
     }, React.createElement("button", {
+    "aria-label": "Back",
       onClick: function () {
         setView("list");
         setSelIdx(null);
@@ -45625,6 +46264,7 @@ function CycleTab() {
         gap: 8
       }
     }, React.createElement("button", {
+    "aria-label": "Edit compound",
       onClick: function () {
         openEdit(selIdx);
       },
@@ -45914,6 +46554,7 @@ function CycleTab() {
         color: TX
       }
     }, editIdx !== null ? "Edit" : "New", " Cycle"), React.createElement("button", {
+    "aria-label": "Close",
       onClick: function () {
         setView("list");
       },
@@ -46069,6 +46710,7 @@ function CycleTab() {
           color: MU
         }
       }, c.dose, " \u2014 ", c.route, " \u2014 ", c.freq)), React.createElement("button", {
+    "aria-label": "Edit compound",
         onClick: function () {
           openCompEdit(i);
         },
@@ -46088,6 +46730,7 @@ function CycleTab() {
         z: 12,
         c: MU
       })), React.createElement("button", {
+    "aria-label": "Delete compound",
         onClick: function () {
           removeComp(i);
         },
@@ -47156,7 +47799,7 @@ function CoachCardioCard(p) {
         React.createElement("p", { style: { fontSize: "0.6875rem", color: MU, marginTop: 1 } }, bits.join("  \u00b7  "))),
       rec.calories && React.createElement("div", { style: { textAlign: "right", flexShrink: 0 } },
         React.createElement("p", { style: { fontSize: "1.125rem", fontWeight: 800, color: TX, lineHeight: 1 } }, rec.calories.value),
-        React.createElement("p", { style: { fontSize: "0.625rem", color: MU, marginTop: 2 } }, "cal net"))),
+        React.createElement("p", { style: { fontSize: "0.6875rem", color: MU, marginTop: 2 } }, "cal net"))),
     rec.calories && React.createElement("p", {
       style: { fontSize: "0.6875rem", color: MU, marginBottom: 10, lineHeight: 1.45 }
     }, "Likely " + rec.calories.range[0] + "\u2013" + rec.calories.range[1] + " cal. " +
@@ -47199,7 +47842,7 @@ function CoachSetupSection(p) {
   }, p.title), p.pill && React.createElement("span", {
     style: {
       padding: "3px 8px", borderRadius: 999, background: OR_H + "18",
-      color: OR, fontSize: "0.625rem", fontWeight: 800
+      color: OR, fontSize: "0.6875rem", fontWeight: 800
     }
   }, p.pill), React.createElement("span", {
     style: { display: "flex", transform: open ? "rotate(270deg)" : "rotate(90deg)", transition: "transform .2s ease" }
@@ -47521,8 +48164,10 @@ function CoachInterview(p) {
 
   var qd = COACH_INTERVIEW_QS[step];
   return React.createElement("div", {
-    role: "dialog",
+    ref: lkDialogRef,
+    tabIndex: -1,
     "aria-modal": "true",
+    role: "dialog",
     "aria-label": "Coach interview",
     style: {
       position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.72)",
@@ -48429,7 +49074,18 @@ function CoachScreen(p) {
     className: "lk-appcol",
     onTouchStart: function (e) {
       var t = e.touches && e.touches[0];
-      swipeRef.current = t ? { x: t.clientX, y: t.clientY } : null;
+      swipeRef.current = t ? { x: t.clientX, y: t.clientY, t: e.timeStamp || Date.now(), v: 0, lx: t.clientX } : null;
+    },
+    onTouchMove: function (e) {
+      var s0 = swipeRef.current;
+      var t = e.touches && e.touches[0];
+      if (!s0 || !t) return;
+      var now = e.timeStamp || Date.now();
+      var dtm = Math.max(now - s0.t, 1);
+      /* Smoothed, same weighting the sheet drag uses. */
+      s0.v = 0.75 * ((t.clientX - s0.lx) / dtm * 1000) + 0.25 * s0.v;
+      s0.t = now;
+      s0.lx = t.clientX;
     },
     onTouchEnd: function (e) {
       var s0 = swipeRef.current;
@@ -48437,9 +49093,15 @@ function CoachScreen(p) {
       var t = e.changedTouches && e.changedTouches[0];
       if (!s0 || !t) return;
       var dx = t.clientX - s0.x, dy = t.clientY - s0.y;
-      if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 2) return;
+      if (Math.abs(dx) < Math.abs(dy) * 2) return;
+      /* Decide on where the gesture was going, not where the finger stopped.
+         A fixed distance threshold ignores velocity entirely, so a fast flick
+         and a slow drag of the same length behaved identically - the classic
+         non-native tell. Same decay constant as UIScrollView. */
+      var projected = dx + s0.v / 1000 * (0.998 / (1 - 0.998));
+      if (Math.abs(projected) < 64) return;
       var idx = PANE_ORDER.indexOf(coachTab);
-      var next = dx < 0 ? idx + 1 : idx - 1;
+      var next = projected < 0 ? idx + 1 : idx - 1;
       if (next >= 0 && next < PANE_ORDER.length) setCoachTab(PANE_ORDER[next]);
     }
   }, savedMsg && React.createElement("div", {
@@ -48472,7 +49134,10 @@ function CoachScreen(p) {
       padding: "52px 20px 16px",
       background: SURF,
       borderBottom: "1px solid " + BORD,
-      flexShrink: 0
+      flexShrink: 0,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -48674,7 +49339,7 @@ function CoachScreen(p) {
           border: "1px solid " + OR_H + "2A"
         }
       }, React.createElement("p", {
-        style: { fontSize: "0.625rem", fontWeight: 800, color: OR, letterSpacing: "0.05em", marginBottom: 6 }
+        style: { fontSize: "0.6875rem", fontWeight: 800, color: OR, letterSpacing: "0.05em", marginBottom: 6 }
       }, "THIS WEEK"),
       React.createElement("p", {
         style: { fontSize: "1.0625rem", fontWeight: 800, color: TX, marginBottom: 2 }
@@ -48940,11 +49605,11 @@ function CoachScreen(p) {
       }
     }, "Change what it sees \u2192")),
     React.createElement("p", {
-      style: { fontSize: "0.6875rem", color: MU, marginTop: 10, lineHeight: 1.5 }
+      style: { fontSize: "0.8125rem", color: MU, marginTop: 10, lineHeight: 1.5 }
     }, "AI coaching can be wrong. Sanity-check anything that affects your health."));
   })(), msgs.length >= 40 && React.createElement("p", {
     style: {
-      textAlign: "center", fontSize: "0.6875rem", color: MU,
+      textAlign: "center", fontSize: "0.8125rem", color: MU,
       padding: "6px 0", borderBottom: "1px dashed " + BORD, marginBottom: 4
     }
   }, "Earlier messages trimmed"), msgs.map(function (m, i) {
@@ -50295,7 +50960,7 @@ function FeedbackScreen(p) {
                 border: "1.5px solid " + (on ? OR_H : BORD),
                 background: on ? OR_H + "1E" : CARD,
                 color: on ? OR : MU,
-                fontSize: "0.5625rem", fontWeight: 700, lineHeight: 1.2
+                fontSize: "0.6875rem", fontWeight: 700, lineHeight: 1.2
               }
             }, it.scale[n - 1]);
           })));
@@ -50432,7 +51097,11 @@ function BetaAdminPanel(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: "linear-gradient(180deg," + RE_H + "18 0%,transparent 100%)"
+      background: "linear-gradient(180deg," + RE_H + "18 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
     }
   }, React.createElement("div", {
     style: {
@@ -50442,6 +51111,7 @@ function BetaAdminPanel(p) {
       marginBottom: 8
     }
   }, React.createElement("button", {
+    "aria-label": "Back",
     onClick: function () {
       p.go("settings");
     },
@@ -50962,12 +51632,12 @@ function WeightLogCard(p) {
     style: {
       padding: "8px 16px",
       borderRadius: 9,
-      border: "none",
-      background: val ? OR : OR_H + "40",
-      color: "#fff",
+      background: val ? ORD2 : "transparent",
+      color: val ? "#fff" : MU,
+      border: val ? "none" : "1px solid " + BORD,
       fontSize: "0.8125rem",
       fontWeight: 700,
-      cursor: "pointer"
+      cursor: val ? "pointer" : "default"
     }
   }, "Log")), showLog && weightLog.length > 0 && React.createElement("div", {
     style: {
@@ -51669,7 +52339,7 @@ var VoiceButton = React.memo(function VoiceButton() {
       alignItems: "flex-end",
       justifyContent: "center"
     },
-    onClick: dismiss
+    onClick: function () { voiceSheet.close(); }
   }, React.createElement("div", {
     ref: voiceSheet.ref,
     onClick: function (e) {
@@ -51678,7 +52348,7 @@ var VoiceButton = React.memo(function VoiceButton() {
     style: {
       background: CARD,
       borderRadius: "20px 20px 0 0",
-      padding: "24px 20px 32px",
+      padding: "24px 20px calc(env(safe-area-inset-bottom, 0px) + 32px)",
       width: "100%",
       maxWidth: 420,
       border: "1px solid " + BORD
@@ -51746,7 +52416,7 @@ var VoiceButton = React.memo(function VoiceButton() {
       gap: 8
     }
   }, React.createElement("button", {
-    onClick: dismiss,
+    onClick: function () { voiceSheet.close(); },
     style: {
       flex: 1,
       padding: "12px",
@@ -51784,8 +52454,8 @@ function TutorialOverlay(p) {
     d: D.bolt,
     accent: "#7C3AED",
     title: "START YOUR FIRST WORKOUT",
-    steps: ["On the Home tab, tap the Quick Start button", "Search for an exercise or scroll to pick one — tap to add it", "Enter weight and reps for each set, then tap Finish when done"],
-    tag: "Home → Quick Start"
+    steps: ["Go to the Train tab and tap Quick Start", "Search for an exercise or scroll to pick one — tap to add it", "Enter weight and reps for each set, then tap Finish when done"],
+    tag: "Train → Quick Start"
   }, {
     d: D.cal,
     accent: "#0EA5E9",
@@ -51815,7 +52485,7 @@ function TutorialOverlay(p) {
     accent: FAT,
     title: "BEYOND THE WORKOUTS",
     steps: ["Log meals in Fuel — macros, calories, and grocery budget all in one place", "Your personal records update automatically every time you hit a new PR", "The Coach tab gives you AI insights based on your actual training data"],
-    tag: "Fuel, Progress, and Coach tabs"
+    tag: "Fuel and Coach tabs · Progress on Home"
   }];
   var [phase, setPhase] = useState("intro");
   var [step, setStep] = useState(0);
@@ -52409,6 +53079,9 @@ function TutorialOverlay(p) {
     }
   }, STEPS.map(function (_, i) {
     return React.createElement("div", {
+      role: "button",
+      tabIndex: 0,
+      onKeyDown: lkKeyActivate,
       key: i,
       onClick: function () {
         jumpTo(i);
@@ -52430,11 +53103,12 @@ function TutorialOverlay(p) {
       alignItems: "center"
     }
   }, React.createElement("button", {
+    "aria-label": "Previous step",
     onClick: goPrev,
     disabled: step === 0,
     style: {
       width: 52,
-      height: 52,
+      minHeight: 52,
       borderRadius: 13,
       border: "1px solid rgba(255,255,255,0.12)",
       background: "transparent",
@@ -52585,7 +53259,7 @@ function PlateCalc(p) {
       background: "rgba(0,0,0,0.55)",
       animation: "overlayIn .3s ease"
     },
-    onClick: p.onClose
+    onClick: function () { pcSheet.close(); }
   }, React.createElement("div", {
     ref: pcSheet.ref,
     onClick: function (e) {
@@ -52598,7 +53272,7 @@ function PlateCalc(p) {
       maxWidth: 420,
       width: "100%",
       margin: "0 auto",
-      padding: "16px 16px 24px",
+      padding: "16px 16px calc(env(safe-area-inset-bottom, 0px) + 24px)",
       animation: "slideUp .5s cubic-bezier(0.32,0.72,0,1)",
       maxHeight: "90vh",
       overflowY: "auto"
@@ -52631,7 +53305,8 @@ function PlateCalc(p) {
       fontWeight: 800
     }
   }, "PLATE CALCULATOR"), React.createElement("button", {
-    onClick: p.onClose,
+    "aria-label": "Close",
+    onClick: function () { pcSheet.close(); },
     style: {
       background: "none",
       border: "none",
@@ -52795,6 +53470,9 @@ function PlateCalc(p) {
     }
   }), addedPlates.slice().reverse().map(function (w, i) {
     return React.createElement("div", {
+      role: "button",
+      tabIndex: 0,
+      onKeyDown: lkKeyActivate,
       key: "L" + i,
       title: "Tap to remove",
       onClick: function () {
@@ -53218,7 +53896,7 @@ function CardioFavorites(p) {
           style: {
             width: 26, height: 20, minWidth: 26, minHeight: 20, padding: 0,
             borderRadius: 6, border: "1px solid " + BORD, background: SU,
-            color: MU, cursor: "pointer", fontSize: "0.625rem", lineHeight: 1
+            color: MU, cursor: "pointer", fontSize: "0.6875rem", lineHeight: 1
           }
         }, "\u25B2"), React.createElement("button", {
           onClick: function (e) { e.stopPropagation(); move(f.id, 1); },
@@ -53227,7 +53905,7 @@ function CardioFavorites(p) {
           style: {
             width: 26, height: 20, minWidth: 26, minHeight: 20, padding: 0,
             borderRadius: 6, border: "1px solid " + BORD, background: SU,
-            color: MU, cursor: "pointer", fontSize: "0.625rem", lineHeight: 1
+            color: MU, cursor: "pointer", fontSize: "0.6875rem", lineHeight: 1
           }
         }, "\u25BC")),
         React.createElement("div", {
@@ -53236,7 +53914,15 @@ function CardioFavorites(p) {
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
           }
         }, React.createElement(Ic, { d: D[f.emoji] || D.bolt, z: 15, c: OR })),
-        React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+        React.createElement("div", {
+            /* The row wraps the star and the edit controls, so the button role
+               belongs here, on the part that only holds the name. */
+            role: editing ? undefined : "button",
+            tabIndex: editing ? undefined : 0,
+            onKeyDown: editing ? undefined : lkKeyActivate,
+            "aria-label": editing ? undefined : "Log " + f.label,
+            style: { flex: 1, minWidth: 0 }
+          },
           renaming === f.id
             ? React.createElement("input", {
                 value: renameVal,
@@ -53252,6 +53938,12 @@ function CardioFavorites(p) {
                 }
               })
             : React.createElement("p", {
+                /* Only a control in edit mode; outside it the row itself is the
+                   button and a nested one would be an invalid nesting. */
+                role: editing ? "button" : undefined,
+                tabIndex: editing ? 0 : undefined,
+                onKeyDown: editing ? lkKeyActivate : undefined,
+                "aria-label": editing ? "Rename " + f.label : undefined,
                 onClick: function (e) {
                   if (!editing) return;
                   e.stopPropagation();
@@ -53260,7 +53952,10 @@ function CardioFavorites(p) {
                 },
                 style: {
                   fontSize: "0.875rem", fontWeight: 700, color: TX,
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  minHeight: editing ? 24 : undefined,
+                  display: editing ? "flex" : undefined,
+                  alignItems: editing ? "center" : undefined
                 }
               }, f.label),
           React.createElement("p", {
@@ -53552,7 +54247,7 @@ function CardioHistory(p) {
           borderRadius: 13, padding: "12px 12px"
         }
       }, React.createElement("p", {
-        style: { fontSize: "0.5625rem", fontWeight: 800, color: MU, marginBottom: 3, letterSpacing: "0.04em" }
+        style: { fontSize: "0.6875rem", fontWeight: 800, color: MU, marginBottom: 3, letterSpacing: "0.04em" }
       }, s[0]), React.createElement("p", {
         className: "ds-num",
         style: { fontSize: "1rem", fontWeight: 800, color: TX, whiteSpace: "nowrap" }
@@ -53567,7 +54262,7 @@ function CardioHistory(p) {
         }
       },
         React.createElement("p", {
-          style: { fontSize: "0.625rem", fontWeight: 800, color: MU, letterSpacing: "0.05em", marginBottom: 10 }
+          style: { fontSize: "0.6875rem", fontWeight: 800, color: MU, letterSpacing: "0.05em", marginBottom: 10 }
         }, "MINUTES PER WEEK"),
         React.createElement("div", {
           role: "img",
@@ -53582,7 +54277,7 @@ function CardioHistory(p) {
             style: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }
           }, React.createElement("p", {
             className: "ds-num",
-            style: { fontSize: "0.5625rem", color: wk.minutes ? MU : "transparent", fontWeight: 700 }
+            style: { fontSize: "0.6875rem", color: wk.minutes ? MU : "transparent", fontWeight: 700 }
           }, String(wk.minutes)),
           React.createElement("div", {
             style: {
@@ -53593,7 +54288,7 @@ function CardioHistory(p) {
             }
           }),
           React.createElement("p", {
-            style: { fontSize: "0.5rem", color: MU, opacity: current ? 1 : 0.7 }
+            style: { fontSize: "0.6875rem", color: MU, opacity: current ? 1 : 0.7 }
           }, current ? "now" : wk.label));
         }))))
     ,
@@ -53601,7 +54296,7 @@ function CardioHistory(p) {
     /* personal bests */
     pbs.length > 0 && React.createElement("div", { style: { marginBottom: 14 } },
       React.createElement("p", {
-        style: { fontSize: "0.625rem", fontWeight: 800, color: MU, letterSpacing: "0.05em", padding: "0 20px 8px" }
+        style: { fontSize: "0.6875rem", fontWeight: 800, color: MU, letterSpacing: "0.05em", padding: "0 20px 8px" }
       }, "PERSONAL BESTS"),
       React.createElement("div", {
         style: {
@@ -53617,7 +54312,7 @@ function CardioHistory(p) {
             border: "1px solid " + OR_H + "22"
           }
         }, React.createElement("p", {
-          style: { fontSize: "0.5625rem", fontWeight: 800, color: OR, letterSpacing: "0.04em", marginBottom: 3 }
+          style: { fontSize: "0.6875rem", fontWeight: 800, color: OR, letterSpacing: "0.04em", marginBottom: 3 }
         }, pb.label.toUpperCase()),
         React.createElement("p", {
           className: "ds-num",
@@ -53625,7 +54320,7 @@ function CardioHistory(p) {
         }, pb.value),
         React.createElement("p", {
           style: {
-            fontSize: "0.625rem", color: MU, marginTop: 2, maxWidth: 150,
+            fontSize: "0.6875rem", color: MU, marginTop: 2, maxWidth: 150,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
           }
         }, pb.sub));
@@ -53637,10 +54332,10 @@ function CardioHistory(p) {
         style: { background: CARD, border: "1px solid " + BORD, borderRadius: 14, padding: "14px" }
       },
         React.createElement("p", {
-          style: { fontSize: "0.625rem", fontWeight: 800, color: MU, letterSpacing: "0.05em", marginBottom: 3 }
+          style: { fontSize: "0.6875rem", fontWeight: 800, color: MU, letterSpacing: "0.05em", marginBottom: 3 }
         }, "TIME IN ZONE"),
         React.createElement("p", {
-          style: { fontSize: "0.625rem", color: MU, marginBottom: 10 }
+          style: { fontSize: "0.6875rem", color: MU, marginBottom: 10 }
         }, "From the " + zone.sessions + (zone.sessions === 1 ? " session" : " sessions") +
            " with a heart rate, by session average."),
         React.createElement("div", {
@@ -53665,7 +54360,7 @@ function CardioHistory(p) {
           }, React.createElement("span", {
             style: { width: 8, height: 8, borderRadius: 4, background: z.col }
           }), React.createElement("p", {
-            style: { fontSize: "0.625rem", color: MU, fontWeight: 600 }
+            style: { fontSize: "0.6875rem", color: MU, fontWeight: 600 }
           }, z.name + " \u00b7 " + zone.minutes[i] + "m"));
         })))),
 
@@ -53748,8 +54443,11 @@ function CardioSection(p) {
   },
     React.createElement("div", {
       style: {
-        padding: "52px 20px 0", background: SURF
-      }
+        padding: "52px 20px 0", background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
+    }
     }, React.createElement("div", {
       style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }
     }, React.createElement("button", {
@@ -54047,12 +54745,12 @@ function CardioLogFlow(p) {
             }
           }), React.createElement("p", {
             style: {
-              fontSize: "0.625rem", fontWeight: 800, color: MU, letterSpacing: "0.06em"
+              fontSize: "0.6875rem", fontWeight: 800, color: MU, letterSpacing: "0.06em"
             }
           }, g.toUpperCase()), React.createElement("p", {
             /* No opacity here: knocking muted text back to 55% drops it
                under the AA contrast floor, and axe is right to call it. */
-            style: { fontSize: "0.625rem", fontWeight: 700, color: MU, marginLeft: "auto" }
+            style: { fontSize: "0.6875rem", fontWeight: 700, color: MU, marginLeft: "auto" }
           }, String(items.length))),
           React.createElement("div", {
             style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, padding: "0 20px" }
@@ -54293,7 +54991,7 @@ function CardioLogFlow(p) {
               borderRadius: 7, cursor: "pointer",
               border: "1px solid " + (on ? OR_H + "55" : BORD),
               background: on ? OR_H + "22" : SU,
-              color: on ? OR : MU, fontSize: "0.625rem", fontWeight: 700
+              color: on ? OR : MU, fontSize: "0.6875rem", fontWeight: 700
             }
           }, n);
         })));
@@ -54392,7 +55090,7 @@ function CardioLogFlow(p) {
           style: { fontSize: "0.8125rem", fontWeight: 700, color: TX, marginBottom: 3 }
         }, "Riding position"),
         React.createElement("p", {
-          style: { fontSize: "0.6875rem", color: MU, marginBottom: 9 }
+          style: { fontSize: "0.8125rem", color: MU, marginBottom: 9 }
         }, "Changes the estimate by about 30%."),
         React.createElement("div", { style: { display: "flex", gap: 5 } },
           CE_RIDE_POSITIONS.map(function (rp) {
@@ -54405,7 +55103,7 @@ function CardioLogFlow(p) {
                 flex: 1, padding: "9px 2px", minWidth: 0, borderRadius: 9, cursor: "pointer",
                 border: "1px solid " + (on ? OR_H + "55" : BORD),
                 background: on ? OR_H + "1C" : SU,
-                color: on ? OR : MU, fontSize: "0.625rem", fontWeight: 700
+                color: on ? OR : MU, fontSize: "0.6875rem", fontWeight: 700
               }
             }, rp.name);
           }))),
@@ -54414,7 +55112,7 @@ function CardioLogFlow(p) {
             style: { fontSize: "0.8125rem", fontWeight: 700, color: TX, marginBottom: 3 }
           }, "Surface"),
           React.createElement("p", {
-            style: { fontSize: "0.6875rem", color: MU, marginBottom: 9 }
+            style: { fontSize: "0.8125rem", color: MU, marginBottom: 9 }
           }, "The biggest lever there is — dry sand more than doubles a walk."),
           React.createElement("div", {
             style: { display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, WebkitOverflowScrolling: "touch" }
@@ -54456,7 +55154,7 @@ function CardioLogFlow(p) {
          }, React.createElement(Ic, { d: D.chev, z: 13, c: MU }))),
       showConsole && React.createElement("div", null,
         React.createElement("p", {
-          style: { fontSize: "0.6875rem", color: MU, lineHeight: 1.5, marginBottom: 9 }
+          style: { fontSize: "0.8125rem", color: MU, lineHeight: 1.5, marginBottom: 9 }
         }, "Stored with the session but not used in the estimate for this activity. Worth keeping \u2014 when the maths improves, saved numbers let old sessions be recalculated."),
         React.createElement("div", { style: ceCardStyle() }, consoleFields.map(numField)))),
 
@@ -54494,7 +55192,7 @@ function CardioLogFlow(p) {
 
 /* ---- shared bits of the form -------------------------------------------- */
 function ceLabelStyle() {
-  return { fontSize: "0.625rem", fontWeight: 800, color: MU, letterSpacing: "0.06em", marginBottom: 8 };
+  return { fontSize: "0.6875rem", fontWeight: 800, color: MU, letterSpacing: "0.06em", marginBottom: 8 };
 }
 function ceCardStyle() {
   return { background: CARD, border: "1px solid " + BORD, borderRadius: 14, overflow: "hidden" };
@@ -54624,7 +55322,7 @@ function ceEstimateCard(e, big) {
         style: {
           padding: "4px 9px", borderRadius: 999,
           background: tone + "1E", border: "1px solid " + tone + "38",
-          color: toneText, fontSize: "0.625rem", fontWeight: 800, whiteSpace: "nowrap"
+          color: toneText, fontSize: "0.6875rem", fontWeight: 800, whiteSpace: "nowrap"
         }
       }, CE_CONFIDENCE_LABEL[e.confidence] || "Estimate"))),
     React.createElement("p", {
@@ -54638,7 +55336,7 @@ function ceEstimateCard(e, big) {
       style: { position: "relative", fontSize: "0.6875rem", color: OR, marginTop: 6, lineHeight: 1.45, fontWeight: 600 }
     }, ceImproveHint(e)),
     e.bodyComplete === false && React.createElement("p", {
-      style: { position: "relative", fontSize: "0.6875rem", color: WA, marginTop: 6, lineHeight: 1.45 }
+      style: { position: "relative", fontSize: "0.8125rem", color: WA, marginTop: 6, lineHeight: 1.45 }
     }, "Add your height, age and sex in your profile and this gets noticeably sharper."));
 }
 
@@ -54997,7 +55695,48 @@ function App() {
     return function () { window.removeEventListener("lockedPushOpen", onPushOpen); };
   }, []);
 
+  /* Browser and system back. Navigation lived entirely in React state, so the
+     iPhone edge-swipe did nothing anywhere and Android's back button exited
+     the app from several levels deep, losing the screen you were on. Each
+     forward move pushes a history entry; popstate unwinds them. When the
+     stack is back at its root the event is left alone, so back still leaves
+     the app from home rather than trapping the user. */
+  /* window.history explicitly: App has its own `history` in scope (the
+     workout log), which shadows the global. */
+  var [discardArmed, setDiscardArmed] = useState(false);
+  var navStack = useRef(null);
+  if (navStack.current === null) navStack.current = [screen];
+  useEffect(function () {
+    function onPop() {
+      var st = navStack.current;
+      if (st.length > 1) {
+        st.pop();
+        setScreen(st[st.length - 1]);
+      }
+      /* At the root the event is deliberately left alone, so back still
+         leaves the app from home instead of trapping the user in it. */
+    }
+    window.addEventListener("popstate", onPop);
+    return function () { window.removeEventListener("popstate", onPop); };
+  }, []);
+
   function go(scr) {
+    if (scr === screen) {
+      /* Tapping the tab you are already on returns that tab to its root, the
+         way it does everywhere else on iOS. */
+      try { window.dispatchEvent(new CustomEvent("lockedTabReset", { detail: scr })); } catch (e) {}
+      return;
+    }
+    var st = navStack.current;
+    /* Switching between top-level tabs replaces the root rather than piling
+       up, so back does not walk through every tab you visited. */
+    var TOP = ["home", "train", "fuel", "coach", "profile"];
+    if (TOP.indexOf(scr) >= 0 && TOP.indexOf(st[st.length - 1]) >= 0) {
+      st[st.length - 1] = scr;
+    } else {
+      st.push(scr);
+      window.history.pushState({ lkDepth: st.length }, "");
+    }
     setScreen(scr);
   }
   if (!profile || !profile.displayName || !profile.username) return React.createElement(Onboarding, {
@@ -55111,7 +55850,7 @@ function App() {
       profile: profile,
       go: go
     });
-    if (screen === "fuel") return React.createElement(FuelTab, {
+    if (screen === "fuel") content = React.createElement(FuelTab, {
       useKg: useKg,
       prs: prs,
       setPrs: setPrs,
@@ -55125,7 +55864,11 @@ function App() {
     });else if (screen === "shopping") content = React.createElement(ShoppingBudgetTab, {
       useKg: useKg,
       profile: profile,
-      go: go
+      go: go,
+      /* Nothing routes here today - Shop is reached from inside Fuel - but
+         the screen guards its back button on this prop, so without it any
+         future caller would land on a screen with no way out. */
+      onBack: function () { go("fuel"); }
     });else if (screen === "betaAdmin") content = React.createElement(BetaAdminPanel, {
       go: go
     });else if (screen === "coach") content = React.createElement(CoachScreen, {
@@ -55153,7 +55896,24 @@ function App() {
       key: screen
     }, content);
   }
-  return React.createElement(React.Fragment, null, React.createElement("style", null, CSS), showTutorial && React.createElement(TutorialOverlay, {
+  return React.createElement(React.Fragment, null, React.createElement("style", null, CSS), React.createElement("div", {
+    /* Decorative and empty, so assistive tech ignores it without an
+       aria-hidden that would make it indistinguishable from the rest
+       banner's spacer. */
+    className: "lk-statusbar-scrim",
+    style: {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      height: "calc(env(safe-area-inset-top, 0px) + 8px)",
+      zIndex: 180,
+      background: "var(--glass-bar)",
+      backdropFilter: "blur(20px) saturate(180%)",
+      WebkitBackdropFilter: "blur(20px) saturate(180%)",
+      pointerEvents: "none"
+    }
+  }), showTutorial && React.createElement(TutorialOverlay, {
     onDone: function () {
       sd("tutorialSeen", true);
       setShowTutorial(false);
@@ -55199,7 +55959,14 @@ function App() {
       gap: 8
     }
   }, React.createElement("button", {
+    /* This wipes a logged session. The app is most likely to be showing this
+       dialog after iOS evicted it mid-workout, so one mis-tap here used to
+       cost the whole session with no confirmation and no undo - while the
+       in-workout Discard button did ask. Two steps, and coloured as the
+       destructive choice. */
     onClick: function () {
+      if (!discardArmed) { setDiscardArmed(true); return; }
+      setDiscardArmed(false);
       setShowResumeDialog(false);
       setWorkout(null);
       sd("activeWorkout", null);
@@ -55211,15 +55978,16 @@ function App() {
       flex: 1,
       padding: "12px",
       borderRadius: 10,
-      border: "1px solid " + BORD,
-      background: "transparent",
-      color: MU,
+      border: "1px solid " + (discardArmed ? RE : BORD),
+      background: discardArmed ? RE_H + "18" : "transparent",
+      color: discardArmed ? RE : MU,
       fontSize: "0.8125rem",
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, "Start Fresh"), React.createElement("button", {
+  }, discardArmed ? "Discard workout?" : "Start Fresh"), React.createElement("button", {
     onClick: function () {
+      setDiscardArmed(false);
       setShowResumeDialog(false);
       setScreen("workout");
     },
@@ -55242,6 +56010,9 @@ function App() {
       background: BG
     }
   }, workoutActive && !onWorkoutScreen && React.createElement("div", {
+    role: "button",
+    tabIndex: 0,
+    onKeyDown: lkKeyActivate,
     onClick: function () {
       setScreen("workout");
     },

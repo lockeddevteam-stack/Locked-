@@ -36,6 +36,11 @@ self.addEventListener("fetch", function (e) {
   var url;
   try { url = new URL(req.url); } catch (err) { return; }
   if (CACHEABLE_HOSTS.indexOf(url.host) === -1) return; /* API traffic: untouched */
+  /* vercel.json rewrites /api/* to the Worker, so a same-origin /api request
+     is API traffic wearing this origin's hostname. It is only safe today
+     because the build calls the Worker directly; the moment anything uses the
+     rewrite, responses would be cached. Exclude it now, while it is free. */
+  if (url.host === self.location.host && /^\/api(\/|$)/.test(url.pathname)) return;
 
   e.respondWith(
     fetch(req)
