@@ -1190,7 +1190,12 @@
       --color-border:rgba(60,60,67,0.12);--color-text:#1C1C1E;
       --color-text-muted:#5F5F66;--color-text-tertiary:#6C6C70;
       --color-shell-bg:#F2F2F7;--color-shell-logo:#C2410C;--color-shell-card:#FFFFFF;--color-shell-fill:#E9E9EF;}
-    html,body{margin:0;padding:0;background:var(--color-shell-bg);min-height:100vh;overflow-x:hidden;}
+    html,body{margin:0;padding:0;background:var(--color-shell-bg);min-height:100vh;overflow-x:hidden;overflow-x:clip;}
+    /* hidden turns body into a scroll container, which detaches every
+       position:sticky header from the viewport scroll (they simply never
+       stick). clip gives the same horizontal guard without creating a scroll
+       container; the hidden line before it is the fallback for engines
+       without clip. */
     @supports (min-height:100dvh){html,body{min-height:100dvh;}}
     /* The app shell must not be a scroll container: on iOS an ancestor with
        overflow set turns position:fixed children loose, which is how the
@@ -7123,8 +7128,11 @@ function ExLib(p) {
     }, React.createElement("div", {
       style: {
         padding: "52px 20px 16px",
-        background: SURF
-      }
+        background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
+    }
     }, React.createElement("div", {
       style: {
         display: "flex",
@@ -7444,8 +7452,11 @@ function ExLib(p) {
     }, React.createElement("div", {
       style: {
         padding: "52px 20px 16px",
-        background: SURF
-      }
+        background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
+    }
     }, React.createElement("div", {
       style: {
         display: "flex",
@@ -7546,8 +7557,12 @@ function ExLib(p) {
     }, React.createElement("div", {
       style: {
         padding: "52px 20px 16px",
-        background: "linear-gradient(180deg," + ag.col + "18 0%,transparent 100%)"
-      }
+        background: "linear-gradient(180deg," + ag.col + "18 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
+    }
     }, React.createElement("button", {
       onClick: function () {
         setSub(null);
@@ -7614,8 +7629,12 @@ function ExLib(p) {
     }, React.createElement("div", {
       style: {
         padding: "52px 20px 16px",
-        background: "linear-gradient(180deg," + ag.col + "20 0%,transparent 100%)"
-      }
+        background: "linear-gradient(180deg," + ag.col + "20 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
+    }
     }, React.createElement("button", {
       onClick: function () {
         setGrp(null);
@@ -7715,7 +7734,10 @@ function ExLib(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -7872,7 +7894,10 @@ function ReplacePanel(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -8465,7 +8490,10 @@ function SplitBuilder(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 20px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -13381,7 +13409,10 @@ function AISplitBuilder(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 24px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -13511,7 +13542,10 @@ function AISplitBuilder(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -13769,7 +13803,10 @@ function AISplitBuilder(p) {
       background: SURF,
       borderBottom: "1px solid " + BORD,
       padding: "52px 20px 16px",
-      flexShrink: 0
+      flexShrink: 0,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -14466,7 +14503,10 @@ function TrainHub(p) {
   }, "Empty workout"))))), React.createElement("div", {
     style: {
       padding: "52px 20px 0",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -15281,7 +15321,11 @@ function Review(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 24px",
-      background: "linear-gradient(180deg," + GR_H + "18 0%,transparent 100%)"
+      background: "linear-gradient(180deg," + GR_H + "18 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
     }
   }, React.createElement("span", {
     style: {
@@ -15492,7 +15536,10 @@ function Review(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("p", {
     style: {
@@ -15599,7 +15646,11 @@ function Review(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: "linear-gradient(180deg," + OR_H + "20 0%,transparent 100%)"
+      background: "linear-gradient(180deg," + OR_H + "20 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
     }
   }, React.createElement("p", {
     style: {
@@ -22052,7 +22103,11 @@ function McOnboarding(p) {
     }
   }, React.createElement("div", {
     style: {
-      padding: "max(58px, calc(env(safe-area-inset-top, 0px) + 10px)) 22px 0"
+      padding: "max(58px, calc(env(safe-area-inset-top, 0px) + 10px)) 22px 0",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      background: SURF
     }
   }, React.createElement("div", {
     style: {
@@ -24099,8 +24154,12 @@ function CycleTrackerScreen(p) {
   if (!isFemaleUser(p.profile)) {
     return React.createElement("div", {
       style: {
-        padding: "max(58px, calc(env(safe-area-inset-top, 0px) + 10px)) 22px"
-      }
+        padding: "max(58px, calc(env(safe-area-inset-top, 0px) + 10px)) 22px",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      background: SURF
+    }
     }, React.createElement("button", {
     "aria-label": "Back",
       onClick: function () {
@@ -25272,8 +25331,12 @@ function HomeScreen(p) {
       }
     }, React.createElement("div", {
       style: {
-        padding: "max(58px, calc(env(safe-area-inset-top, 0px) + 10px)) 24px 0"
-      }
+        padding: "max(58px, calc(env(safe-area-inset-top, 0px) + 10px)) 24px 0",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      background: SURF
+    }
     }, React.createElement("button", {
       onClick: function () {
         setShowRecap(false);
@@ -25422,7 +25485,11 @@ function HomeScreen(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: "linear-gradient(180deg," + OR_H + "18 0%,transparent 100%)"
+      background: "linear-gradient(180deg," + OR_H + "18 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
     }
   }, React.createElement("div", {
     style: {
@@ -27368,8 +27435,11 @@ function ProgressPage(p) {
     }, React.createElement("div", {
       style: {
         padding: "52px 20px 16px",
-        background: SURF
-      }
+        background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
+    }
     }, React.createElement("div", {
       style: {
         display: "flex",
@@ -27483,7 +27553,11 @@ function ProgressPage(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 0",
-      background: "linear-gradient(180deg," + OR_H + "18 0%,transparent 100%)"
+      background: "linear-gradient(180deg," + OR_H + "18 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
     }
   }, React.createElement("div", {
     style: {
@@ -28108,7 +28182,10 @@ function PRHub(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -28289,8 +28366,12 @@ function PRHub(p) {
     }, React.createElement("div", {
       style: {
         padding: "52px 20px 16px",
-        background: "linear-gradient(180deg," + OR_H + "15 0%,transparent 100%)"
-      }
+        background: "linear-gradient(180deg," + OR_H + "15 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
+    }
     }, React.createElement("div", {
       style: {
         display: "flex",
@@ -28517,7 +28598,10 @@ function PRHub(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 0",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, p.onBack ? React.createElement("div", {
     style: {
@@ -29102,7 +29186,13 @@ function ProfileScreen(p) {
   }, "SIGN UP")), React.createElement("div", {
     style: {
       padding: (isGuest ? "18px" : "52px") + " 20px 18px",
-      background: "linear-gradient(180deg," + OR_H + "20 0%,transparent 100%)"
+      background: "linear-gradient(180deg," + OR_H + "20 0%,transparent 100%)",
+      /* identity row doubles as this screen's chrome (it carries the
+         Settings action), so it pins with the rest of the frames */
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
     }
   }, React.createElement("div", {
     style: {
@@ -30262,7 +30352,10 @@ function LayoutEditor(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -30830,7 +30923,10 @@ function SettingsScreen(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -34555,7 +34651,10 @@ function FuelProfileSetup(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 20px",
-      background: SURF
+      background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -35693,8 +35792,13 @@ function FuelTab(p) {
     }
   }, React.createElement("div", {
     style: {
-      padding: "52px 20px 16px",
-      background: "linear-gradient(180deg," + OR_H + "18 0%,transparent 100%)"
+      /* the pinned frame: title and actions only - the summary cards
+         below scroll like content, they are content */
+      padding: "52px 20px 12px",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      background: SURF
     }
   }, React.createElement("div", {
     style: {
@@ -35756,7 +35860,12 @@ function FuelTab(p) {
     d: D.edit,
     z: 13,
     c: MU
-  }), " My Profile"))), React.createElement("div", {
+  }), " My Profile")))), React.createElement("div", {
+    style: {
+      padding: "0 20px 16px",
+      background: "linear-gradient(180deg," + OR_H + "18 0%,transparent 100%)"
+    }
+  }, React.createElement("div", {
     style: {
       background: CARD,
       borderRadius: 16,
@@ -44269,8 +44378,18 @@ function ShoppingBudgetTab(p) {
     }
   }, React.createElement("div", {
     style: {
-      paddingTop: 52,
-      paddingBottom: 16
+      /* This header wrote its clearance as a number, so it missed both the
+         safe-area sweep and the frame pass; brought in line with the rest. */
+      paddingTop: "max(58px, calc(env(safe-area-inset-top, 0px) + 10px))",
+      paddingBottom: 16,
+      paddingLeft: 16,
+      paddingRight: 16,
+      marginLeft: -16,
+      marginRight: -16,
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      background: SURF
     }
   }, p.onBack && React.createElement("button", {
     onClick: function () {
@@ -49015,7 +49134,10 @@ function CoachScreen(p) {
       padding: "52px 20px 16px",
       background: SURF,
       borderBottom: "1px solid " + BORD,
-      flexShrink: 0
+      flexShrink: 0,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
     }
   }, React.createElement("div", {
     style: {
@@ -50975,7 +51097,11 @@ function BetaAdminPanel(p) {
   }, React.createElement("div", {
     style: {
       padding: "52px 20px 16px",
-      background: "linear-gradient(180deg," + RE_H + "18 0%,transparent 100%)"
+      background: "linear-gradient(180deg," + RE_H + "18 0%,transparent 100%)",
+      position: "sticky",
+      top: 0,
+      zIndex: 60,
+      backgroundColor: "var(--color-surface)"
     }
   }, React.createElement("div", {
     style: {
@@ -54317,8 +54443,11 @@ function CardioSection(p) {
   },
     React.createElement("div", {
       style: {
-        padding: "52px 20px 0", background: SURF
-      }
+        padding: "52px 20px 0", background: SURF,
+      position: "sticky",
+      top: 0,
+      zIndex: 60
+    }
     }, React.createElement("div", {
       style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }
     }, React.createElement("button", {
